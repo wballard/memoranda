@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use ulid::Ulid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -25,6 +26,7 @@ pub struct Memo {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub tags: Vec<String>,
+    pub file_path: Option<PathBuf>,
 }
 
 impl Memo {
@@ -37,6 +39,20 @@ impl Memo {
             created_at: now,
             updated_at: now,
             tags: Vec::new(),
+            file_path: None,
+        }
+    }
+
+    pub fn with_file_path(title: String, content: String, file_path: Option<PathBuf>) -> Self {
+        let now = Utc::now();
+        Self {
+            id: MemoId::new(),
+            title,
+            content,
+            created_at: now,
+            updated_at: now,
+            tags: Vec::new(),
+            file_path,
         }
     }
 

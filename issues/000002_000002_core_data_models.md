@@ -58,3 +58,47 @@ Implement the core data structures and file system storage for managing memos in
 - Implement proper error types using `anyhow`
 - Store memos as markdown files with meaningful filenames
 - Support Unicode in memo content and titles
+
+---
+
+## Update: 2025-07-18 09:48:10
+
+
+## Proposed Solution
+
+Based on the existing codebase analysis, I'll implement the following:
+
+### 1. Update Memo struct
+- Add `file_path: Option<PathBuf>` field to the existing `Memo` struct
+- Update constructor and methods to handle file paths
+- Keep existing fields and functionality intact
+
+### 2. Create MemoStore struct
+- Implement file system-based storage alongside existing in-memory storage
+- Add methods: `find_memoranda_dirs()`, `list_memos()`, `get_memo(id)`, `create_memo()`, `update_memo()`, `delete_memo()`
+- Use `.memoranda` directories as storage locations within git repositories
+
+### 3. Implement utility functions
+- `sanitize_filename()`: Convert titles to filesystem-safe filenames
+- `extract_title_from_filename()`: Parse titles from markdown filenames
+- `find_git_root()`: Locate git repository root using `.git` directory
+- Directory traversal using existing `walkdir` dependency
+
+### 4. File system operations
+- Read/write markdown files with frontmatter metadata
+- Handle Unicode content properly
+- Implement proper error handling for I/O operations
+- Support both absolute and relative paths
+
+### 5. Error handling
+- Use `anyhow` for error types (already in dependencies)
+- Handle file I/O, permissions, and UTF-8 conversion errors
+- Provide meaningful error messages
+
+### 6. Testing approach
+- Unit tests for all utility functions
+- Integration tests for file operations using `tempfile`
+- Tests for error conditions and edge cases
+- Tests for directory traversal and memo file discovery
+
+This solution maintains compatibility with existing code while adding the required filesystem functionality.
