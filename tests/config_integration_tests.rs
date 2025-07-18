@@ -70,7 +70,7 @@ fn test_settings_rust_version_validation() {
             minimum_rust_version: version.to_string(),
             max_memo_file_size: 1_000_000,
         };
-        assert!(settings.validate().is_ok(), "Version should be valid: {}", version);
+        assert!(settings.validate().is_ok(), "Version should be valid: {version}");
     }
 
     // Test various invalid version formats
@@ -101,7 +101,7 @@ fn test_settings_rust_version_validation() {
             minimum_rust_version: version.to_string(),
             max_memo_file_size: 1_000_000,
         };
-        assert!(settings.validate().is_err(), "Version should be invalid: {}", version);
+        assert!(settings.validate().is_err(), "Version should be invalid: {version}");
     }
 }
 
@@ -129,7 +129,7 @@ fn test_settings_log_level_validation() {
             minimum_rust_version: "1.70.0".to_string(),
             max_memo_file_size: 1_000_000,
         };
-        assert!(settings.validate().is_ok(), "Log level should be valid: {}", level);
+        assert!(settings.validate().is_ok(), "Log level should be valid: {level}");
     }
 
     // Test empty log level
@@ -195,11 +195,30 @@ fn test_settings_file_operations_with_nested_directory() {
 fn test_settings_file_operations_error_handling() {
     let settings = Settings::new().unwrap();
     
-    // Test saving to invalid path (e.g., root directory on Unix systems)
-    let invalid_path = PathBuf::from("/root/cannot_write_here.json");
-    let _result = settings.save_to_file(&invalid_path);
-    // This may or may not fail depending on system permissions
-    // The test just verifies the method handles the error gracefully
+    // Test saving to invalid path - use a path that definitely can't be written to
+    // on any system: a path that contains null bytes
+    let invalid_path = PathBuf::from("/root/\0invalid/cannot_write_here.json");
+    let result = settings.save_to_file(&invalid_path);
+    assert!(result.is_err(), "Should fail to save to invalid path with null bytes");
+    
+    // Test saving to a directory that doesn't exist and can't be created
+    // Use a path that tries to create a file inside a non-directory file
+    let temp_file = tempfile::NamedTempFile::new().unwrap();
+    let impossible_path = temp_file.path().join("cannot_create_dir_here").join("file.json");
+    let result = settings.save_to_file(&impossible_path);
+    assert!(result.is_err(), "Should fail to save to path inside a regular file");
+    
+    // Test loading from non-existent file
+    let non_existent_path = PathBuf::from("/definitely/does/not/exist/settings.json");
+    let result = Settings::load_from_file(&non_existent_path);
+    // This should return Ok with default settings, not an error
+    assert!(result.is_ok(), "Should return default settings for non-existent file");
+    
+    // Test loading from a directory instead of a file
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let dir_path = temp_dir.path().to_path_buf();
+    let result = Settings::load_from_file(&dir_path);
+    assert!(result.is_err(), "Should fail to load from directory path");
 }
 
 #[test]
@@ -225,17 +244,21 @@ fn test_settings_load_from_empty_file() {
     let temp_file = NamedTempFile::new().unwrap();
     let path = temp_file.path().to_path_buf();
     
-    // Write empty file
+    // Write empty file - should return defaults
     fs::write(&path, "").unwrap();
     
     let result = Settings::load_from_file(&path);
-    assert!(result.is_err());
+    assert!(result.is_ok());
+    let settings = result.unwrap();
+    assert_eq!(settings.log_level, "info");
     
-    // Write only whitespace
+    // Write only whitespace - should return defaults
     fs::write(&path, "   \n\t  ").unwrap();
     
     let result = Settings::load_from_file(&path);
-    assert!(result.is_err());
+    assert!(result.is_ok());
+    let settings = result.unwrap();
+    assert_eq!(settings.log_level, "info");
 }
 
 #[test]
@@ -331,14 +354,14 @@ fn test_settings_concurrent_file_operations() {
         
         let handle = thread::spawn(move || {
             let settings = Settings {
-                data_dir: PathBuf::from(format!("./data-{}", i)),
+                data_dir: PathBuf::from(format!("./data-{i}")),
                 log_level: "info".to_string(),
                 mcp_server_port: 8080 + i as u16,
                 minimum_rust_version: "1.70.0".to_string(),
                 max_memo_file_size: 1_000_000,
             };
             
-            let path = temp_dir.join(format!("settings-{}.json", i));
+            let path = temp_dir.join(format!("settings-{i}.json"));
             if settings.save_to_file(&path).is_ok() {
                 success_count.fetch_add(1, Ordering::Relaxed);
             }
@@ -434,7 +457,7 @@ fn test_settings_property_based_validation() {
     for _ in 0..100 {
         let port: u16 = (1024..=65535).fake();
         let log_level: String = {
-            let levels = vec!["error", "warn", "info", "debug", "trace"];
+            let levels = ["error", "warn", "info", "debug", "trace"];
             let index: usize = (0..levels.len()).fake();
             levels[index].to_string()
         };
@@ -455,4 +478,194 @@ fn test_settings_property_based_validation() {
         
         assert!(settings.validate().is_ok());
     }
+}
+
+#[test]
+fn test_settings_advanced_error_scenarios() {
+    // Test validation errors with specific error types
+    
+    // Test invalid port boundary
+    let settings = Settings {
+        data_dir: PathBuf::from("./data"),
+        log_level: "info".to_string(),
+        mcp_server_port: 1023, // Just below minimum
+        minimum_rust_version: "1.70.0".to_string(),
+        max_memo_file_size: 1_000_000,
+    };
+    
+    let result = settings.validate();
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("Port must be"));
+    assert!(error.to_string().contains("1024"));
+    
+    // Test invalid Rust version formats
+    let invalid_versions = vec![
+        "1.70",           // Missing patch version
+        "1",              // Too short
+        "1.70.0.1",       // Too many components
+        "1.70.0-beta",    // Pre-release
+        "1.70.0+build",   // Build metadata
+        "v1.70.0",        // With prefix
+        "not.a.version",  // Invalid format
+        "1.x.0",          // Invalid characters
+    ];
+    
+    for version in invalid_versions {
+        let settings = Settings {
+            data_dir: PathBuf::from("./data"),
+            log_level: "info".to_string(),
+            mcp_server_port: 8080,
+            minimum_rust_version: version.to_string(),
+            max_memo_file_size: 1_000_000,
+        };
+        
+        let result = settings.validate();
+        assert!(result.is_err(), "Version '{}' should be invalid", version);
+        let error = result.unwrap_err();
+        assert!(
+            error.to_string().contains("Invalid minimum Rust version"),
+            "Error message should mention invalid Rust version for '{}'", 
+            version
+        );
+    }
+    
+    // Test empty fields
+    let settings = Settings {
+        data_dir: PathBuf::from("./data"),
+        log_level: "".to_string(), // Empty log level
+        mcp_server_port: 8080,
+        minimum_rust_version: "1.70.0".to_string(),
+        max_memo_file_size: 1_000_000,
+    };
+    
+    let result = settings.validate();
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("Log level cannot be empty"));
+    
+    // Test zero file size
+    let settings = Settings {
+        data_dir: PathBuf::from("./data"),
+        log_level: "info".to_string(),
+        mcp_server_port: 8080,
+        minimum_rust_version: "1.70.0".to_string(),
+        max_memo_file_size: 0, // Invalid size
+    };
+    
+    let result = settings.validate();
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("must be at least"));
+}
+
+#[test]
+fn test_settings_serialization_error_handling() {
+    // Test handling of malformed JSON during deserialization
+    use tempfile::NamedTempFile;
+    use std::fs;
+    
+    let temp_file = NamedTempFile::new().unwrap();
+    let path = temp_file.path().to_path_buf();
+    
+    // Test various malformed JSON scenarios
+    let malformed_json_cases = vec![
+        "",                              // Empty file
+        "{",                             // Unclosed brace
+        "{ \"invalid\": }",              // Missing value
+        "{ \"data_dir\": true }",        // Wrong type for field
+        "{ \"mcp_server_port\": \"not_a_number\" }", // String where number expected
+        "not json at all",               // Not JSON
+        "{ \"unknown_field_only\": true }", // Missing required fields
+    ];
+    
+    for (i, malformed_json) in malformed_json_cases.iter().enumerate() {
+        fs::write(&path, malformed_json).unwrap();
+        
+        let result = Settings::load_from_file(&path);
+        if malformed_json.is_empty() {
+            // Empty file should return default settings
+            assert!(result.is_ok(), "Case {}: Empty file should return defaults", i);
+            let settings = result.unwrap();
+            assert_eq!(settings.log_level, "info");
+        } else {
+            // All other malformed JSON should fail
+            assert!(result.is_err(), "Case {}: Malformed JSON '{}' should fail to parse", i, malformed_json);
+        }
+    }
+}
+
+#[test]
+fn test_settings_filesystem_permission_scenarios() {
+    use std::fs;
+    use tempfile::TempDir;
+    
+    let temp_dir = TempDir::new().unwrap();
+    let settings = Settings::new().unwrap();
+    
+    // Create a read-only directory to test permission errors
+    let readonly_dir = temp_dir.path().join("readonly");
+    fs::create_dir(&readonly_dir).unwrap();
+    
+    // Set directory to read-only (this may not work on all systems)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&readonly_dir).unwrap().permissions();
+        perms.set_mode(0o444); // Read-only
+        let _ = fs::set_permissions(&readonly_dir, perms);
+        
+        // Try to save to read-only directory
+        let readonly_path = readonly_dir.join("settings.json");
+        let result = settings.save_to_file(&readonly_path);
+        // This might or might not fail depending on system and user permissions
+        // We just verify the method doesn't panic
+        let _ = result;
+    }
+    
+    // Test with very long path names that might exceed filesystem limits
+    let long_filename = "a".repeat(300); // Very long filename
+    let long_path = temp_dir.path().join(long_filename);
+    let result = settings.save_to_file(&long_path);
+    // This might succeed or fail depending on filesystem limits
+    // We just verify no panic occurs
+    let _ = result;
+}
+
+#[test] 
+fn test_settings_edge_case_values() {
+    // Test with edge case but valid values
+    
+    // Test with maximum port value
+    let settings = Settings {
+        data_dir: PathBuf::from("./data"),
+        log_level: "trace".to_string(), // Valid but uncommon level
+        mcp_server_port: 65535, // Maximum u16 value
+        minimum_rust_version: "1.0.0".to_string(), // Very old but valid version
+        max_memo_file_size: u64::MAX, // Maximum possible file size
+    };
+    
+    assert!(settings.validate().is_ok());
+    
+    // Test with minimum valid values
+    let settings = Settings {
+        data_dir: PathBuf::from("."), // Minimal path
+        log_level: "error".to_string(), // Valid minimal level
+        mcp_server_port: 1024, // Minimum valid port
+        minimum_rust_version: "0.1.0".to_string(), // Very early version
+        max_memo_file_size: 1, // Minimum file size
+    };
+    
+    assert!(settings.validate().is_ok());
+    
+    // Test with unicode in paths
+    let settings = Settings {
+        data_dir: PathBuf::from("./数据/مجلد/папка"), // Unicode characters
+        log_level: "info".to_string(),
+        mcp_server_port: 8080,
+        minimum_rust_version: "1.70.0".to_string(),
+        max_memo_file_size: 1_000_000,
+    };
+    
+    assert!(settings.validate().is_ok());
 }

@@ -64,3 +64,6 @@ mockall = "0.12"
 fake = { version = "2.9", features = ["derive"] }
 # Async testing
 
+[[bench]]
+name = "memo_performance_benchmarks"
+harness = false

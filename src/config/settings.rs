@@ -3,6 +3,17 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tracing::info;
 
+// Default configuration constants
+const DEFAULT_DATA_DIR: &str = "./data";
+const DEFAULT_LOG_LEVEL: &str = "info";
+const DEFAULT_MCP_SERVER_PORT: u16 = 8080;
+const DEFAULT_MINIMUM_RUST_VERSION: &str = "1.70.0";
+const DEFAULT_MAX_MEMO_FILE_SIZE: u64 = 1_000_000; // 1MB
+
+// Validation constants
+const MIN_VALID_PORT: u16 = 1024;
+const MIN_MEMO_FILE_SIZE: u64 = 1;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     pub data_dir: PathBuf,
@@ -15,11 +26,11 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            data_dir: PathBuf::from("./data"),
-            log_level: "info".to_string(),
-            mcp_server_port: 8080,
-            minimum_rust_version: "1.70.0".to_string(),
-            max_memo_file_size: 1_000_000, // 1MB
+            data_dir: PathBuf::from(DEFAULT_DATA_DIR),
+            log_level: DEFAULT_LOG_LEVEL.to_string(),
+            mcp_server_port: DEFAULT_MCP_SERVER_PORT,
+            minimum_rust_version: DEFAULT_MINIMUM_RUST_VERSION.to_string(),
+            max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
         }
     }
 }
@@ -33,10 +44,10 @@ impl Settings {
     }
 
     pub fn validate(&self) -> Result<()> {
-        if self.mcp_server_port < 1024 {
+        if self.mcp_server_port < MIN_VALID_PORT {
             return Err(MemorandaError::Validation(format!(
-                "Invalid port number: {}. Port must be 1024 or higher",
-                self.mcp_server_port
+                "Invalid port number: {}. Port must be {} or higher",
+                self.mcp_server_port, MIN_VALID_PORT
             )));
         }
 
@@ -70,10 +81,11 @@ impl Settings {
             }
         }
 
-        if self.max_memo_file_size == 0 {
-            return Err(MemorandaError::Validation(
-                "Maximum memo file size must be greater than 0".to_string(),
-            ));
+        if self.max_memo_file_size < MIN_MEMO_FILE_SIZE {
+            return Err(MemorandaError::Validation(format!(
+                "Maximum memo file size must be at least {} bytes",
+                MIN_MEMO_FILE_SIZE
+            )));
         }
 
         Ok(())
@@ -83,8 +95,13 @@ impl Settings {
         info!("Loading settings from file: {:?}", path);
         if path.exists() {
             let content = std::fs::read_to_string(path)?;
-            let settings: Settings = serde_json::from_str(&content)?;
-            Ok(settings)
+            if content.trim().is_empty() {
+                info!("Settings file is empty, using defaults");
+                Ok(Self::default())
+            } else {
+                let settings: Settings = serde_json::from_str(&content)?;
+                Ok(settings)
+            }
         } else {
             info!("Settings file not found, using defaults");
             Ok(Self::default())
@@ -111,21 +128,21 @@ mod tests {
     #[test]
     fn test_settings_creation() {
         let settings = Settings::new().unwrap();
-        assert_eq!(settings.data_dir, PathBuf::from("./data"));
-        assert_eq!(settings.log_level, "info");
-        assert_eq!(settings.mcp_server_port, 8080);
-        assert_eq!(settings.minimum_rust_version, "1.70.0");
-        assert_eq!(settings.max_memo_file_size, 1_000_000);
+        assert_eq!(settings.data_dir, PathBuf::from(DEFAULT_DATA_DIR));
+        assert_eq!(settings.log_level, DEFAULT_LOG_LEVEL);
+        assert_eq!(settings.mcp_server_port, DEFAULT_MCP_SERVER_PORT);
+        assert_eq!(settings.minimum_rust_version, DEFAULT_MINIMUM_RUST_VERSION);
+        assert_eq!(settings.max_memo_file_size, DEFAULT_MAX_MEMO_FILE_SIZE);
     }
 
     #[test]
     fn test_settings_validation_valid_port() {
         let settings = Settings {
-            data_dir: PathBuf::from("./data"),
-            log_level: "info".to_string(),
-            mcp_server_port: 8080,
-            minimum_rust_version: "1.70.0".to_string(),
-            max_memo_file_size: 1_000_000,
+            data_dir: PathBuf::from(DEFAULT_DATA_DIR),
+            log_level: DEFAULT_LOG_LEVEL.to_string(),
+            mcp_server_port: DEFAULT_MCP_SERVER_PORT,
+            minimum_rust_version: DEFAULT_MINIMUM_RUST_VERSION.to_string(),
+            max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
         };
         assert!(settings.validate().is_ok());
     }
@@ -133,11 +150,11 @@ mod tests {
     #[test]
     fn test_settings_validation_invalid_port() {
         let settings = Settings {
-            data_dir: PathBuf::from("./data"),
-            log_level: "info".to_string(),
-            mcp_server_port: 80, // Invalid port
-            minimum_rust_version: "1.70.0".to_string(),
-            max_memo_file_size: 1_000_000,
+            data_dir: PathBuf::from(DEFAULT_DATA_DIR),
+            log_level: DEFAULT_LOG_LEVEL.to_string(),
+            mcp_server_port: MIN_VALID_PORT - 1, // Invalid port
+            minimum_rust_version: DEFAULT_MINIMUM_RUST_VERSION.to_string(),
+            max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
         };
         assert!(settings.validate().is_err());
     }
@@ -145,11 +162,11 @@ mod tests {
     #[test]
     fn test_settings_validation_empty_log_level() {
         let settings = Settings {
-            data_dir: PathBuf::from("./data"),
+            data_dir: PathBuf::from(DEFAULT_DATA_DIR),
             log_level: "".to_string(),
-            mcp_server_port: 8080,
-            minimum_rust_version: "1.70.0".to_string(),
-            max_memo_file_size: 1_000_000,
+            mcp_server_port: DEFAULT_MCP_SERVER_PORT,
+            minimum_rust_version: DEFAULT_MINIMUM_RUST_VERSION.to_string(),
+            max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
         };
         assert!(settings.validate().is_err());
     }
@@ -176,11 +193,11 @@ mod tests {
     #[test]
     fn test_settings_validation_invalid_rust_version() {
         let settings = Settings {
-            data_dir: PathBuf::from("./data"),
-            log_level: "info".to_string(),
-            mcp_server_port: 8080,
+            data_dir: PathBuf::from(DEFAULT_DATA_DIR),
+            log_level: DEFAULT_LOG_LEVEL.to_string(),
+            mcp_server_port: DEFAULT_MCP_SERVER_PORT,
             minimum_rust_version: "invalid.version".to_string(),
-            max_memo_file_size: 1_000_000,
+            max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
         };
         assert!(settings.validate().is_err());
     }
@@ -188,11 +205,11 @@ mod tests {
     #[test]
     fn test_settings_validation_empty_rust_version() {
         let settings = Settings {
-            data_dir: PathBuf::from("./data"),
-            log_level: "info".to_string(),
-            mcp_server_port: 8080,
+            data_dir: PathBuf::from(DEFAULT_DATA_DIR),
+            log_level: DEFAULT_LOG_LEVEL.to_string(),
+            mcp_server_port: DEFAULT_MCP_SERVER_PORT,
             minimum_rust_version: "".to_string(),
-            max_memo_file_size: 1_000_000,
+            max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
         };
         assert!(settings.validate().is_err());
     }
@@ -200,12 +217,48 @@ mod tests {
     #[test]
     fn test_settings_validation_zero_file_size() {
         let settings = Settings {
-            data_dir: PathBuf::from("./data"),
-            log_level: "info".to_string(),
-            mcp_server_port: 8080,
-            minimum_rust_version: "1.70.0".to_string(),
-            max_memo_file_size: 0,
+            data_dir: PathBuf::from(DEFAULT_DATA_DIR),
+            log_level: DEFAULT_LOG_LEVEL.to_string(),
+            mcp_server_port: DEFAULT_MCP_SERVER_PORT,
+            minimum_rust_version: DEFAULT_MINIMUM_RUST_VERSION.to_string(),
+            max_memo_file_size: MIN_MEMO_FILE_SIZE - 1, // Invalid size
         };
         assert!(settings.validate().is_err());
+    }
+
+    #[test]
+    fn test_settings_validation_high_port() {
+        // Test with a high valid port value
+        let settings = Settings {
+            data_dir: PathBuf::from(DEFAULT_DATA_DIR),
+            log_level: DEFAULT_LOG_LEVEL.to_string(),
+            mcp_server_port: u16::MAX, // Maximum possible port
+            minimum_rust_version: DEFAULT_MINIMUM_RUST_VERSION.to_string(),
+            max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
+        };
+        assert!(settings.validate().is_ok());
+    }
+
+    #[test]
+    fn test_settings_validation_edge_case_ports() {
+        // Test minimum valid port
+        let settings = Settings {
+            data_dir: PathBuf::from(DEFAULT_DATA_DIR),
+            log_level: DEFAULT_LOG_LEVEL.to_string(),
+            mcp_server_port: MIN_VALID_PORT,
+            minimum_rust_version: DEFAULT_MINIMUM_RUST_VERSION.to_string(),
+            max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
+        };
+        assert!(settings.validate().is_ok());
+        
+        // Test maximum valid port
+        let settings = Settings {
+            data_dir: PathBuf::from(DEFAULT_DATA_DIR),
+            log_level: DEFAULT_LOG_LEVEL.to_string(),
+            mcp_server_port: u16::MAX,
+            minimum_rust_version: DEFAULT_MINIMUM_RUST_VERSION.to_string(),
+            max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
+        };
+        assert!(settings.validate().is_ok());
     }
 }

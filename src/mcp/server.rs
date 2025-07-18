@@ -107,7 +107,7 @@ impl McpServer {
                             // Parse JSON-RPC message
                             match serde_json::from_str::<serde_json::Value>(line) {
                                 Ok(message) => {
-                                    let response = self.handle_message(message, &mut initialized).await;
+                                    let response = self.handle_message_internal(message, &mut initialized).await;
                                     if let Some(response) = response {
                                         if let Err(e) = writeln!(stdout, "{response}") {
                                             error!("Failed to write response: {}", e);
@@ -152,7 +152,15 @@ impl McpServer {
         Ok(())
     }
 
-    async fn handle_message(
+    pub async fn handle_message(
+        &self,
+        message: serde_json::Value,
+        initialized: &mut bool,
+    ) -> Option<serde_json::Value> {
+        self.handle_message_internal(message, initialized).await
+    }
+
+    async fn handle_message_internal(
         &self,
         message: serde_json::Value,
         initialized: &mut bool,
@@ -284,7 +292,6 @@ impl McpServer {
         &self.tools
     }
 
-    #[cfg(test)]
     pub fn new_with_memo_store(name: String, memo_store: MemoStore) -> Self {
         info!("Creating test MCP server: {}", name);
         let tools = vec![
