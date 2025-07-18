@@ -1,9 +1,15 @@
-use std::collections::HashMap;
-use std::cmp::Ordering;
 use chrono::{DateTime, Utc};
 use regex::Regex;
+use std::cmp::Ordering;
+use std::collections::HashMap;
+use tracing::warn;
 
 use super::models::{Memo, MemoId};
+
+// Search scoring and snippet configuration constants
+const RECENCY_BOOST_DAYS: f64 = 365.0;
+const SNIPPET_LENGTH: usize = 100;
+const SNIPPET_CONTEXT_PADDING: usize = 2;
 
 #[derive(Debug, Clone)]
 pub enum SearchOperator {
@@ -110,7 +116,7 @@ impl SearchQuery {
 
     pub fn parse_query(query: &str) -> Self {
         let mut search_query = SearchQuery::new();
-        
+
         // Simple parser for basic query formats
         if query.contains(" AND ") || query.contains(" OR ") || query.contains(" NOT ") {
             if let Some(boolean_query) = Self::parse_boolean_query(query) {
@@ -128,7 +134,7 @@ impl SearchQuery {
             // Simple term search
             search_query.terms = query.split_whitespace().map(|s| s.to_string()).collect();
         }
-        
+
         search_query
     }
 
@@ -138,42 +144,42 @@ impl SearchQuery {
         if let Some(and_pos) = query.find(" AND ") {
             let left = query[..and_pos].trim();
             let right = query[and_pos + 5..].trim();
-            
+
             return Some(SearchTerm::Boolean {
                 left: Box::new(Self::parse_term(left)),
                 operator: SearchOperator::And,
                 right: Box::new(Self::parse_term(right)),
             });
         }
-        
+
         if let Some(or_pos) = query.find(" OR ") {
             let left = query[..or_pos].trim();
             let right = query[or_pos + 4..].trim();
-            
+
             return Some(SearchTerm::Boolean {
                 left: Box::new(Self::parse_term(left)),
                 operator: SearchOperator::Or,
                 right: Box::new(Self::parse_term(right)),
             });
         }
-        
+
         if let Some(not_pos) = query.find(" NOT ") {
             let left = query[..not_pos].trim();
             let right = query[not_pos + 5..].trim();
-            
+
             return Some(SearchTerm::Boolean {
                 left: Box::new(Self::parse_term(left)),
                 operator: SearchOperator::Not,
                 right: Box::new(Self::parse_term(right)),
             });
         }
-        
+
         None
     }
 
     fn parse_term(term: &str) -> SearchTerm {
         let term = term.trim();
-        
+
         if term.starts_with('"') && term.ends_with('"') {
             SearchTerm::Phrase(term.trim_matches('"').to_string())
         } else if term.contains('*') || term.contains('?') {
@@ -250,7 +256,7 @@ impl MemoSearcher {
 
     pub fn index_memo(&mut self, memo: &Memo) {
         let tokens = self.tokenize_text(&format!("{} {}", memo.title, memo.content));
-        
+
         for token in tokens {
             self.index
                 .entry(token.to_lowercase())
@@ -261,7 +267,7 @@ impl MemoSearcher {
 
     pub fn search(&self, query: &SearchQuery, memos: &[Memo]) -> Vec<SearchResult> {
         let mut results = Vec::new();
-        
+
         for memo in memos {
             if let Some(score) = self.score_memo(memo, query) {
                 let mut result = SearchResult::new(memo.clone(), score);
@@ -269,14 +275,14 @@ impl MemoSearcher {
                 results.push(result);
             }
         }
-        
+
         results.sort();
         results
     }
 
     pub fn get_all_context(&self, memos: &[Memo]) -> String {
         let mut context = String::new();
-        
+
         for memo in memos {
             context.push_str(&format!(
                 "# {}\n\n**Created:** {}\n**Updated:** {}\n**Tags:** {}\n\n{}\n\n---\n\n",
@@ -287,7 +293,7 @@ impl MemoSearcher {
                 memo.content
             ));
         }
-        
+
         context
     }
 
@@ -305,19 +311,10 @@ impl MemoSearcher {
 
         // Term matching
         if !query.terms.is_empty() {
-            let title_lower = memo.title.to_lowercase();
-            let content_lower = memo.content.to_lowercase();
-            
             for term in &query.terms {
-                let term_lower = term.to_lowercase();
-                
-                if title_lower.contains(&term_lower) {
-                    score += 2.0; // Title matches are worth more
-                    matches = true;
-                }
-                
-                if content_lower.contains(&term_lower) {
-                    score += 1.0;
+                let (term_score, term_matches) = self.score_term_match(memo, term, 2.0, 1.0);
+                score += term_score;
+                if term_matches {
                     matches = true;
                 }
             }
@@ -325,17 +322,9 @@ impl MemoSearcher {
 
         // Phrase matching
         if let Some(phrase) = &query.phrase {
-            let phrase_lower = phrase.to_lowercase();
-            let title_lower = memo.title.to_lowercase();
-            let content_lower = memo.content.to_lowercase();
-            
-            if title_lower.contains(&phrase_lower) {
-                score += 3.0; // Phrase matches are worth more
-                matches = true;
-            }
-            
-            if content_lower.contains(&phrase_lower) {
-                score += 1.5;
+            let (phrase_score, phrase_matches) = self.score_term_match(memo, phrase, 3.0, 1.5);
+            score += phrase_score;
+            if phrase_matches {
                 matches = true;
             }
         }
@@ -356,7 +345,7 @@ impl MemoSearcher {
                 return None;
             }
         }
-        
+
         if let Some(date_to) = query.date_to {
             if memo.created_at > date_to {
                 return None;
@@ -365,11 +354,16 @@ impl MemoSearcher {
 
         // Regex matching
         if let Some(regex_pattern) = &query.regex {
-            if let Ok(regex) = Regex::new(regex_pattern) {
-                let search_text = format!("{} {}", memo.title, memo.content);
-                if regex.is_match(&search_text) {
-                    score += 1.0;
-                    matches = true;
+            match Regex::new(regex_pattern) {
+                Ok(regex) => {
+                    let search_text = format!("{} {}", memo.title, memo.content);
+                    if regex.is_match(&search_text) {
+                        score += 1.0;
+                        matches = true;
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to compile regex pattern '{}': {}", regex_pattern, e);
                 }
             }
         }
@@ -385,9 +379,9 @@ impl MemoSearcher {
         // Apply recency boost
         if matches {
             let days_since_creation = (Utc::now() - memo.created_at).num_days();
-            let recency_boost = 1.0 / (1.0 + days_since_creation as f64 / 365.0);
+            let recency_boost = 1.0 / (1.0 + days_since_creation as f64 / RECENCY_BOOST_DAYS);
             score *= 1.0 + recency_boost;
-            
+
             Some(score)
         } else {
             None
@@ -395,22 +389,25 @@ impl MemoSearcher {
     }
 
     fn add_snippets(&self, result: &mut SearchResult, query: &SearchQuery) {
-        const SNIPPET_LENGTH: usize = 100;
-        
+
         if !query.terms.is_empty() {
             for term in &query.terms {
-                if let Some(snippet) = self.extract_snippet(&result.memo.content, term, SNIPPET_LENGTH) {
+                if let Some(snippet) =
+                    self.extract_snippet(&result.memo.content, term, SNIPPET_LENGTH)
+                {
                     result.snippets.push(snippet);
                 }
             }
         }
-        
+
         if let Some(phrase) = &query.phrase {
-            if let Some(snippet) = self.extract_snippet(&result.memo.content, phrase, SNIPPET_LENGTH) {
+            if let Some(snippet) =
+                self.extract_snippet(&result.memo.content, phrase, SNIPPET_LENGTH)
+            {
                 result.snippets.push(snippet);
             }
         }
-        
+
         // Remove duplicates
         result.snippets.sort();
         result.snippets.dedup();
@@ -419,11 +416,11 @@ impl MemoSearcher {
     fn extract_snippet(&self, content: &str, term: &str, max_length: usize) -> Option<String> {
         let term_lower = term.to_lowercase();
         let content_lower = content.to_lowercase();
-        
+
         if let Some(pos) = content_lower.find(&term_lower) {
-            let start = pos.saturating_sub(max_length / 2);
-            let end = std::cmp::min(content.len(), pos + term.len() + max_length / 2);
-            
+            let start = pos.saturating_sub(max_length / SNIPPET_CONTEXT_PADDING);
+            let end = std::cmp::min(content.len(), pos + term.len() + max_length / SNIPPET_CONTEXT_PADDING);
+
             let snippet = &content[start..end];
             Some(format!("...{snippet}..."))
         } else {
@@ -434,63 +431,47 @@ impl MemoSearcher {
     fn evaluate_boolean_term(&self, memo: &Memo, term: &SearchTerm) -> Option<f64> {
         match term {
             SearchTerm::Word(word) => {
-                let word_lower = word.to_lowercase();
-                let title_lower = memo.title.to_lowercase();
-                let content_lower = memo.content.to_lowercase();
-                
-                if title_lower.contains(&word_lower) {
-                    Some(2.0)
-                } else if content_lower.contains(&word_lower) {
-                    Some(1.0)
-                } else {
-                    None
-                }
+                self.score_term_match_optional(memo, word, 2.0, 1.0)
             }
             SearchTerm::Phrase(phrase) => {
-                let phrase_lower = phrase.to_lowercase();
-                let title_lower = memo.title.to_lowercase();
-                let content_lower = memo.content.to_lowercase();
-                
-                if title_lower.contains(&phrase_lower) {
-                    Some(3.0)
-                } else if content_lower.contains(&phrase_lower) {
-                    Some(1.5)
-                } else {
-                    None
-                }
+                self.score_term_match_optional(memo, phrase, 3.0, 1.5)
             }
             SearchTerm::Wildcard(pattern) => {
                 let regex_pattern = self.wildcard_to_regex(pattern);
-                if let Ok(regex) = Regex::new(&regex_pattern) {
-                    let search_text = format!("{} {}", memo.title, memo.content);
-                    if regex.is_match(&search_text) {
-                        Some(1.0)
-                    } else {
+                match Regex::new(&regex_pattern) {
+                    Ok(regex) => {
+                        let search_text = format!("{} {}", memo.title, memo.content);
+                        if regex.is_match(&search_text) {
+                            Some(1.0)
+                        } else {
+                            None
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to compile wildcard pattern '{}' as regex '{}': {}", pattern, regex_pattern, e);
                         None
                     }
-                } else {
-                    None
                 }
             }
-            SearchTerm::Boolean { left, operator, right } => {
+            SearchTerm::Boolean {
+                left,
+                operator,
+                right,
+            } => {
                 let left_score = self.evaluate_boolean_term(memo, left);
                 let right_score = self.evaluate_boolean_term(memo, right);
-                
+
                 match operator {
-                    SearchOperator::And => {
-                        match (left_score, right_score) {
-                            (Some(l), Some(r)) => Some(l + r),
-                            _ => None,
-                        }
-                    }
-                    SearchOperator::Or => {
-                        match (left_score, right_score) {
-                            (Some(l), Some(r)) => Some(l + r),
-                            (Some(l), None) => Some(l),
-                            (None, Some(r)) => Some(r),
-                            (None, None) => None,
-                        }
-                    }
+                    SearchOperator::And => match (left_score, right_score) {
+                        (Some(l), Some(r)) => Some(l + r),
+                        _ => None,
+                    },
+                    SearchOperator::Or => match (left_score, right_score) {
+                        (Some(l), Some(r)) => Some(l + r),
+                        (Some(l), None) => Some(l),
+                        (None, Some(r)) => Some(r),
+                        (None, None) => None,
+                    },
                     SearchOperator::Not => {
                         if left_score.is_some() && right_score.is_none() {
                             left_score
@@ -506,7 +487,7 @@ impl MemoSearcher {
     fn wildcard_to_regex(&self, pattern: &str) -> String {
         let mut regex = String::new();
         regex.push_str("(?i)"); // Case insensitive
-        
+
         for ch in pattern.chars() {
             match ch {
                 '*' => regex.push_str(".*"),
@@ -518,8 +499,45 @@ impl MemoSearcher {
                 }
             }
         }
-        
+
         regex
+    }
+
+    /// Helper method to score a term match against a memo
+    fn score_term_match(&self, memo: &Memo, term: &str, title_score: f64, content_score: f64) -> (f64, bool) {
+        let term_lower = term.to_lowercase();
+        let title_lower = memo.title.to_lowercase();
+        let content_lower = memo.content.to_lowercase();
+        
+        let mut score = 0.0;
+        let mut matches = false;
+        
+        if title_lower.contains(&term_lower) {
+            score += title_score;
+            matches = true;
+        }
+        
+        if content_lower.contains(&term_lower) {
+            score += content_score;
+            matches = true;
+        }
+        
+        (score, matches)
+    }
+
+    /// Helper method to score a term match and return Option<f64> for boolean evaluation
+    fn score_term_match_optional(&self, memo: &Memo, term: &str, title_score: f64, content_score: f64) -> Option<f64> {
+        let term_lower = term.to_lowercase();
+        let title_lower = memo.title.to_lowercase();
+        let content_lower = memo.content.to_lowercase();
+        
+        if title_lower.contains(&term_lower) {
+            Some(title_score)
+        } else if content_lower.contains(&term_lower) {
+            Some(content_score)
+        } else {
+            None
+        }
     }
 }
 
@@ -592,13 +610,13 @@ mod tests {
     fn test_search_result_ordering() {
         let memo1 = create_test_memo("Test1", "Content1");
         let memo2 = create_test_memo("Test2", "Content2");
-        
+
         let result1 = SearchResult::new(memo1, 1.0);
         let result2 = SearchResult::new(memo2, 2.0);
-        
+
         let mut results = vec![result1, result2];
         results.sort();
-        
+
         assert_eq!(results[0].score, 2.0);
         assert_eq!(results[1].score, 1.0);
     }
@@ -613,9 +631,9 @@ mod tests {
     fn test_memo_searcher_index_memo() {
         let mut searcher = MemoSearcher::new();
         let memo = create_test_memo("Test Title", "Test content");
-        
+
         searcher.index_memo(&memo);
-        
+
         assert!(searcher.index.contains_key("test"));
         assert!(searcher.index.contains_key("title"));
         assert!(searcher.index.contains_key("content"));
@@ -626,14 +644,14 @@ mod tests {
         let mut searcher = MemoSearcher::new();
         let memo1 = create_test_memo("Rust Programming", "Learning Rust language");
         let memo2 = create_test_memo("Python Guide", "Python programming tutorial");
-        
+
         searcher.index_memo(&memo1);
         searcher.index_memo(&memo2);
-        
+
         let memos = vec![memo1.clone(), memo2.clone()];
         let query = SearchQuery::with_terms(vec!["rust".to_string()]);
         let results = searcher.search(&query, &memos);
-        
+
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].memo.id, memo1.id);
         assert!(results[0].score > 0.0);
@@ -644,14 +662,14 @@ mod tests {
         let mut searcher = MemoSearcher::new();
         let memo1 = create_test_memo("Test", "hello world example");
         let memo2 = create_test_memo("Test", "hello there world");
-        
+
         searcher.index_memo(&memo1);
         searcher.index_memo(&memo2);
-        
+
         let memos = vec![memo1.clone(), memo2.clone()];
         let query = SearchQuery::with_phrase("hello world".to_string());
         let results = searcher.search(&query, &memos);
-        
+
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].memo.id, memo1.id);
     }
@@ -661,14 +679,14 @@ mod tests {
         let mut searcher = MemoSearcher::new();
         let memo1 = create_test_memo_with_tags("Test1", "Content1", vec!["rust".to_string()]);
         let memo2 = create_test_memo_with_tags("Test2", "Content2", vec!["python".to_string()]);
-        
+
         searcher.index_memo(&memo1);
         searcher.index_memo(&memo2);
-        
+
         let memos = vec![memo1.clone(), memo2.clone()];
         let query = SearchQuery::with_tags(vec!["rust".to_string()]);
         let results = searcher.search(&query, &memos);
-        
+
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].memo.id, memo1.id);
     }
@@ -676,12 +694,14 @@ mod tests {
     #[test]
     fn test_memo_searcher_get_all_context() {
         let searcher = MemoSearcher::new();
-        let memo1 = create_test_memo_with_tags("First Memo", "First content", vec!["tag1".to_string()]);
-        let memo2 = create_test_memo_with_tags("Second Memo", "Second content", vec!["tag2".to_string()]);
-        
+        let memo1 =
+            create_test_memo_with_tags("First Memo", "First content", vec!["tag1".to_string()]);
+        let memo2 =
+            create_test_memo_with_tags("Second Memo", "Second content", vec!["tag2".to_string()]);
+
         let memos = vec![memo1, memo2];
         let context = searcher.get_all_context(&memos);
-        
+
         assert!(context.contains("# First Memo"));
         assert!(context.contains("# Second Memo"));
         assert!(context.contains("First content"));
@@ -697,7 +717,7 @@ mod tests {
     fn test_tokenize_text() {
         let searcher = MemoSearcher::new();
         let tokens = searcher.tokenize_text("Hello, world! This is a test.");
-        
+
         assert!(tokens.contains(&"Hello".to_string()));
         assert!(tokens.contains(&"world".to_string()));
         assert!(tokens.contains(&"This".to_string()));
@@ -709,9 +729,10 @@ mod tests {
     #[test]
     fn test_extract_snippet() {
         let searcher = MemoSearcher::new();
-        let content = "This is a long piece of content that contains the word rust in the middle of it.";
+        let content =
+            "This is a long piece of content that contains the word rust in the middle of it.";
         let snippet = searcher.extract_snippet(content, "rust", 20);
-        
+
         assert!(snippet.is_some());
         let snippet = snippet.unwrap();
         assert!(snippet.contains("rust"));
@@ -724,7 +745,7 @@ mod tests {
         let searcher = MemoSearcher::new();
         let memo = create_test_memo("Rust Programming", "Learning languages");
         let query = SearchQuery::with_terms(vec!["rust".to_string()]);
-        
+
         let score = searcher.score_memo(&memo, &query);
         assert!(score.is_some());
         assert!(score.unwrap() > 0.0);
@@ -735,7 +756,7 @@ mod tests {
         let searcher = MemoSearcher::new();
         let memo = create_test_memo("Programming", "Learning rust language");
         let query = SearchQuery::with_terms(vec!["rust".to_string()]);
-        
+
         let score = searcher.score_memo(&memo, &query);
         assert!(score.is_some());
         assert!(score.unwrap() > 0.0);
@@ -746,7 +767,7 @@ mod tests {
         let searcher = MemoSearcher::new();
         let memo = create_test_memo("Python", "Learning python language");
         let query = SearchQuery::with_terms(vec!["rust".to_string()]);
-        
+
         let score = searcher.score_memo(&memo, &query);
         assert!(score.is_none());
     }
@@ -754,7 +775,10 @@ mod tests {
     #[test]
     fn test_search_query_parse_simple() {
         let query = SearchQuery::parse_query("rust programming");
-        assert_eq!(query.terms, vec!["rust".to_string(), "programming".to_string()]);
+        assert_eq!(
+            query.terms,
+            vec!["rust".to_string(), "programming".to_string()]
+        );
         assert!(query.phrase.is_none());
         assert!(query.boolean_query.is_none());
     }
@@ -781,9 +805,13 @@ mod tests {
         let query = SearchQuery::parse_query("rust AND programming");
         assert!(query.boolean_query.is_some());
         match query.boolean_query.unwrap() {
-            SearchTerm::Boolean { left, operator, right } => {
+            SearchTerm::Boolean {
+                left,
+                operator,
+                right,
+            } => {
                 match operator {
-                    SearchOperator::And => {},
+                    SearchOperator::And => {}
                     _ => panic!("Expected AND operator"),
                 }
                 match (*left, *right) {
@@ -803,9 +831,13 @@ mod tests {
         let query = SearchQuery::parse_query("rust OR python");
         assert!(query.boolean_query.is_some());
         match query.boolean_query.unwrap() {
-            SearchTerm::Boolean { left, operator, right } => {
+            SearchTerm::Boolean {
+                left,
+                operator,
+                right,
+            } => {
                 match operator {
-                    SearchOperator::Or => {},
+                    SearchOperator::Or => {}
                     _ => panic!("Expected OR operator"),
                 }
                 match (*left, *right) {
@@ -825,11 +857,11 @@ mod tests {
         let searcher = MemoSearcher::new();
         let memo1 = create_test_memo("Rust Programming", "Learning rust language");
         let memo2 = create_test_memo("Python", "Learning python language");
-        
+
         let memos = vec![memo1.clone(), memo2.clone()];
         let query = SearchQuery::parse_query("rust AND programming");
         let results = searcher.search(&query, &memos);
-        
+
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].memo.id, memo1.id);
     }
@@ -840,11 +872,11 @@ mod tests {
         let memo1 = create_test_memo("Rust Programming", "Learning rust language");
         let memo2 = create_test_memo("Python", "Learning python language");
         let memo3 = create_test_memo("JavaScript", "Learning javascript");
-        
+
         let memos = vec![memo1.clone(), memo2.clone(), memo3.clone()];
         let query = SearchQuery::parse_query("rust OR python");
         let results = searcher.search(&query, &memos);
-        
+
         assert_eq!(results.len(), 2);
         // Results should contain both memo1 and memo2
         let result_ids: Vec<_> = results.iter().map(|r| r.memo.id).collect();
@@ -857,11 +889,11 @@ mod tests {
         let searcher = MemoSearcher::new();
         let memo1 = create_test_memo("Rust Programming", "Learning rust language");
         let memo2 = create_test_memo("Python", "Learning python language");
-        
+
         let memos = vec![memo1.clone(), memo2.clone()];
         let query = SearchQuery::parse_query("rust*");
         let results = searcher.search(&query, &memos);
-        
+
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].memo.id, memo1.id);
     }
@@ -869,7 +901,7 @@ mod tests {
     #[test]
     fn test_wildcard_to_regex() {
         let searcher = MemoSearcher::new();
-        
+
         assert_eq!(searcher.wildcard_to_regex("rust*"), "(?i)rust.*");
         assert_eq!(searcher.wildcard_to_regex("rust?"), "(?i)rust.");
         assert_eq!(searcher.wildcard_to_regex("rust*ing"), "(?i)rust.*ing");
@@ -881,7 +913,7 @@ mod tests {
         let searcher = MemoSearcher::new();
         let memo = create_test_memo("Rust Programming", "Learning rust language");
         let term = SearchTerm::Word("rust".to_string());
-        
+
         let score = searcher.evaluate_boolean_term(&memo, &term);
         assert!(score.is_some());
         assert_eq!(score.unwrap(), 2.0); // Title match
@@ -892,7 +924,7 @@ mod tests {
         let searcher = MemoSearcher::new();
         let memo = create_test_memo("Hello World", "This is a hello world example");
         let term = SearchTerm::Phrase("hello world".to_string());
-        
+
         let score = searcher.evaluate_boolean_term(&memo, &term);
         assert!(score.is_some());
         assert_eq!(score.unwrap(), 3.0); // Title phrase match
@@ -903,7 +935,7 @@ mod tests {
         let searcher = MemoSearcher::new();
         let memo = create_test_memo("Rust Programming", "Learning rust language");
         let term = SearchTerm::Wildcard("rust*".to_string());
-        
+
         let score = searcher.evaluate_boolean_term(&memo, &term);
         assert!(score.is_some());
         assert_eq!(score.unwrap(), 1.0); // Wildcard match

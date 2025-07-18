@@ -2,6 +2,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::RwLock;
 use thiserror::Error;
 use tracing::{info, warn};
 use walkdir::WalkDir;
@@ -106,11 +107,17 @@ impl MemoStorage {
 #[derive(Debug)]
 pub struct MemoStore {
     root_path: PathBuf,
+    searcher: RwLock<MemoSearcher>,
+    index_dirty: RwLock<bool>,
 }
 
 impl MemoStore {
     pub fn new(root_path: PathBuf) -> Self {
-        Self { root_path }
+        Self {
+            root_path,
+            searcher: RwLock::new(MemoSearcher::new()),
+            index_dirty: RwLock::new(true),
+        }
     }
 
     pub fn from_git_root() -> Result<Self> {
@@ -220,6 +227,7 @@ impl MemoStore {
         let memo = Memo::with_file_path(title, content.clone(), Some(file_path.clone()))?;
 
         self.save_memo_to_file(&memo, &file_path)?;
+        self.mark_index_dirty();
 
         Ok(memo)
     }
@@ -234,6 +242,7 @@ impl MemoStore {
         if let Some(file_path) = &memo.file_path {
             self.save_memo_to_file(&memo, file_path)?;
         }
+        self.mark_index_dirty();
 
         Ok(memo)
     }
@@ -246,6 +255,7 @@ impl MemoStore {
         if let Some(file_path) = &memo.file_path {
             fs::remove_file(file_path)?;
         }
+        self.mark_index_dirty();
 
         Ok(())
     }
@@ -335,40 +345,54 @@ impl MemoStore {
 
     pub fn search_memos(&self, query: &str) -> Result<Vec<SearchResult>> {
         let memos = self.list_memos()?;
-        let mut searcher = MemoSearcher::new();
+        self.ensure_index_updated(&memos)?;
         
-        // Index all memos
-        for memo in &memos {
-            searcher.index_memo(memo);
-        }
-        
-        // Parse and execute search query
+        let searcher = self.searcher.read().unwrap();
         let search_query = SearchQuery::parse_query(query);
         let results = searcher.search(&search_query, &memos);
-        
+
         Ok(results)
     }
 
     pub fn search_memos_with_query(&self, query: &SearchQuery) -> Result<Vec<SearchResult>> {
         let memos = self.list_memos()?;
-        let mut searcher = MemoSearcher::new();
+        self.ensure_index_updated(&memos)?;
         
-        // Index all memos
-        for memo in &memos {
-            searcher.index_memo(memo);
-        }
-        
-        // Execute search query
+        let searcher = self.searcher.read().unwrap();
         let results = searcher.search(query, &memos);
-        
+
         Ok(results)
     }
 
     pub fn get_all_context(&self) -> Result<String> {
         let memos = self.list_memos()?;
         let searcher = MemoSearcher::new();
-        
+
         Ok(searcher.get_all_context(&memos))
+    }
+
+    /// Ensures the search index is up-to-date with the current memos
+    fn ensure_index_updated(&self, memos: &[Memo]) -> Result<()> {
+        let is_dirty = *self.index_dirty.read().unwrap();
+        
+        if is_dirty {
+            let mut searcher = self.searcher.write().unwrap();
+            *searcher = MemoSearcher::new();
+            
+            // Re-index all memos
+            for memo in memos {
+                searcher.index_memo(memo);
+            }
+            
+            *self.index_dirty.write().unwrap() = false;
+        }
+        
+        Ok(())
+    }
+
+    /// Marks the search index as dirty, requiring re-indexing
+    fn mark_index_dirty(&self) {
+        *self.index_dirty.write().unwrap() = true;
     }
 }
 
@@ -687,10 +711,16 @@ mod tests {
 
         // Create test memos
         let memo1 = store
-            .create_memo("Rust Programming".to_string(), "Learning rust language".to_string())
+            .create_memo(
+                "Rust Programming".to_string(),
+                "Learning rust language".to_string(),
+            )
             .unwrap();
         let _memo2 = store
-            .create_memo("Python Guide".to_string(), "Python programming tutorial".to_string())
+            .create_memo(
+                "Python Guide".to_string(),
+                "Python programming tutorial".to_string(),
+            )
             .unwrap();
 
         // Test search functionality
@@ -715,9 +745,9 @@ mod tests {
 
     #[test]
     fn test_memo_store_search_memos_with_query() {
+        use crate::memo::search::SearchQuery;
         use std::fs;
         use tempfile::TempDir;
-        use crate::memo::search::SearchQuery;
 
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
@@ -730,10 +760,16 @@ mod tests {
 
         // Create test memos
         let memo1 = store
-            .create_memo("Rust Programming".to_string(), "Learning rust language".to_string())
+            .create_memo(
+                "Rust Programming".to_string(),
+                "Learning rust language".to_string(),
+            )
             .unwrap();
         let _memo2 = store
-            .create_memo("Python Guide".to_string(), "Python programming tutorial".to_string())
+            .create_memo(
+                "Python Guide".to_string(),
+                "Python programming tutorial".to_string(),
+            )
             .unwrap();
 
         // Test search with custom query
