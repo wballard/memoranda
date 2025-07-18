@@ -7,6 +7,7 @@ use tracing::{info, warn};
 use walkdir::WalkDir;
 
 use super::models::{Memo, MemoId};
+use super::search::{MemoSearcher, SearchQuery, SearchResult};
 
 #[derive(Error, Debug)]
 pub enum MemoStoreError {
@@ -331,6 +332,44 @@ impl MemoStore {
 
         Ok(())
     }
+
+    pub fn search_memos(&self, query: &str) -> Result<Vec<SearchResult>> {
+        let memos = self.list_memos()?;
+        let mut searcher = MemoSearcher::new();
+        
+        // Index all memos
+        for memo in &memos {
+            searcher.index_memo(memo);
+        }
+        
+        // Parse and execute search query
+        let search_query = SearchQuery::parse_query(query);
+        let results = searcher.search(&search_query, &memos);
+        
+        Ok(results)
+    }
+
+    pub fn search_memos_with_query(&self, query: &SearchQuery) -> Result<Vec<SearchResult>> {
+        let memos = self.list_memos()?;
+        let mut searcher = MemoSearcher::new();
+        
+        // Index all memos
+        for memo in &memos {
+            searcher.index_memo(memo);
+        }
+        
+        // Execute search query
+        let results = searcher.search(query, &memos);
+        
+        Ok(results)
+    }
+
+    pub fn get_all_context(&self) -> Result<String> {
+        let memos = self.list_memos()?;
+        let searcher = MemoSearcher::new();
+        
+        Ok(searcher.get_all_context(&memos))
+    }
 }
 
 pub fn sanitize_filename(title: &str) -> String {
@@ -630,5 +669,114 @@ mod tests {
         // Verify the memo is no longer retrievable
         let retrieved = store.get_memo(&memo_id).unwrap();
         assert!(retrieved.is_none());
+    }
+
+    #[test]
+    fn test_memo_store_search_memos() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create a .memoranda directory
+        let memoranda_dir = temp_path.join(".memoranda");
+        fs::create_dir(&memoranda_dir).unwrap();
+
+        let store = MemoStore::new(temp_path.to_path_buf());
+
+        // Create test memos
+        let memo1 = store
+            .create_memo("Rust Programming".to_string(), "Learning rust language".to_string())
+            .unwrap();
+        let _memo2 = store
+            .create_memo("Python Guide".to_string(), "Python programming tutorial".to_string())
+            .unwrap();
+
+        // Test search functionality
+        let results = store.search_memos("rust").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].memo.id, memo1.id);
+
+        let results = store.search_memos("programming").unwrap();
+        assert_eq!(results.len(), 2);
+
+        let results = store.search_memos("\"rust language\"").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].memo.id, memo1.id);
+
+        let results = store.search_memos("rust AND programming").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].memo.id, memo1.id);
+
+        let results = store.search_memos("rust OR python").unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_memo_store_search_memos_with_query() {
+        use std::fs;
+        use tempfile::TempDir;
+        use crate::memo::search::SearchQuery;
+
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create a .memoranda directory
+        let memoranda_dir = temp_path.join(".memoranda");
+        fs::create_dir(&memoranda_dir).unwrap();
+
+        let store = MemoStore::new(temp_path.to_path_buf());
+
+        // Create test memos
+        let memo1 = store
+            .create_memo("Rust Programming".to_string(), "Learning rust language".to_string())
+            .unwrap();
+        let _memo2 = store
+            .create_memo("Python Guide".to_string(), "Python programming tutorial".to_string())
+            .unwrap();
+
+        // Test search with custom query
+        let query = SearchQuery::with_terms(vec!["rust".to_string()]);
+        let results = store.search_memos_with_query(&query).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].memo.id, memo1.id);
+
+        let query = SearchQuery::with_phrase("rust language".to_string());
+        let results = store.search_memos_with_query(&query).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].memo.id, memo1.id);
+    }
+
+    #[test]
+    fn test_memo_store_get_all_context() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create a .memoranda directory
+        let memoranda_dir = temp_path.join(".memoranda");
+        fs::create_dir(&memoranda_dir).unwrap();
+
+        let store = MemoStore::new(temp_path.to_path_buf());
+
+        // Create test memos
+        let _memo1 = store
+            .create_memo("First Memo".to_string(), "First content".to_string())
+            .unwrap();
+        let _memo2 = store
+            .create_memo("Second Memo".to_string(), "Second content".to_string())
+            .unwrap();
+
+        // Test context aggregation
+        let context = store.get_all_context().unwrap();
+        assert!(context.contains("# First Memo"));
+        assert!(context.contains("# Second Memo"));
+        assert!(context.contains("First content"));
+        assert!(context.contains("Second content"));
+        assert!(context.contains("Created:"));
+        assert!(context.contains("Updated:"));
     }
 }
