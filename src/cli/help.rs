@@ -11,14 +11,38 @@ impl HelpCommand {
 
     pub fn run(&self) -> Result<()> {
         info!("Displaying help");
-        println!("Memoranda - A memory-augmented note-taking system");
+        println!("Memoranda - A note-taking MCP server for coding agents");
         println!();
         println!("USAGE:");
         println!("    memoranda [COMMAND]");
         println!();
         println!("COMMANDS:");
-        println!("    doctor    Check system health");
-        println!("    help      Show this help message");
+        println!("    doctor    Check system health and configuration");
+        println!("    serve     Start the MCP server on stdio");
+        println!();
+        println!("EXAMPLES:");
+        println!("    memoranda doctor           # Run diagnostics");
+        println!("    memoranda serve            # Start MCP server");
+        println!();
+        println!("MCP INTEGRATION:");
+        println!("To use with Claude Code, add this to your MCP settings:");
+        println!();
+        println!("{{");
+        println!("  \"mcpServers\": {{");
+        println!("    \"memoranda\": {{");
+        println!("      \"command\": \"memoranda\",");
+        println!("      \"args\": [\"serve\"],");
+        println!("      \"env\": {{}}");
+        println!("    }}");
+        println!("  }}");
+        println!("}}");
+        println!();
+        println!("SETUP:");
+        println!("1. Run 'memoranda doctor' to check your setup");
+        println!("2. Add the MCP configuration above to Claude Code");
+        println!("3. Use the memo tools in Claude Code to manage your notes");
+        println!();
+        println!("For more information, visit: https://github.com/wballard/memoranda");
         Ok(())
     }
 }

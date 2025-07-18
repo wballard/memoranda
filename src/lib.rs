@@ -6,6 +6,6 @@ pub mod memo;
 
 pub use cli::*;
 pub use config::*;
-pub use error::*;
+pub use error::MemorandaError;
 pub use mcp::*;
 pub use memo::*;
