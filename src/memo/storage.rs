@@ -1,11 +1,68 @@
-use anyhow::{anyhow, Result};
+// use anyhow::anyhow;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
 use walkdir::WalkDir;
+use thiserror::Error;
 
 use super::models::{Memo, MemoId};
+
+#[derive(Error, Debug)]
+pub enum MemoStoreError {
+    #[error("Memo not found: {id}")]
+    MemoNotFound { id: String },
+    
+    #[error("No .memoranda directories found")]
+    NoMemorandaDirectories,
+    
+    #[error("Invalid frontmatter in file {file}: {source}")]
+    InvalidFrontmatter { file: String, source: serde_json::Error },
+    
+    #[error("Missing frontmatter section in file {file}")]
+    MissingFrontmatter { file: String },
+    
+    #[error("File operation failed: {source}")]
+    FileOperation { source: std::io::Error },
+    
+    #[error("Serialization error: {source}")]
+    Serialization { source: serde_json::Error },
+    
+    #[error("Validation error: {message}")]
+    Validation { message: String },
+    
+    #[error("Walkdir error: {source}")]
+    WalkDir { source: walkdir::Error },
+    
+    #[error("Git repository not found")]
+    GitNotFound,
+}
+
+pub type Result<T> = std::result::Result<T, MemoStoreError>;
+
+impl From<std::io::Error> for MemoStoreError {
+    fn from(err: std::io::Error) -> Self {
+        MemoStoreError::FileOperation { source: err }
+    }
+}
+
+impl From<serde_json::Error> for MemoStoreError {
+    fn from(err: serde_json::Error) -> Self {
+        MemoStoreError::Serialization { source: err }
+    }
+}
+
+impl From<walkdir::Error> for MemoStoreError {
+    fn from(err: walkdir::Error) -> Self {
+        MemoStoreError::WalkDir { source: err }
+    }
+}
+
+impl From<anyhow::Error> for MemoStoreError {
+    fn from(err: anyhow::Error) -> Self {
+        MemoStoreError::Validation { message: err.to_string() }
+    }
+}
 
 #[derive(Default)]
 pub struct MemoStorage {
@@ -93,19 +150,68 @@ impl MemoStore {
     }
 
     pub fn get_memo(&self, id: &MemoId) -> Result<Option<Memo>> {
-        let memos = self.list_memos()?;
-        Ok(memos.into_iter().find(|m| &m.id == id))
+        let memoranda_dirs = self.find_memoranda_dirs()?;
+        
+        for dir in memoranda_dirs {
+            for entry in fs::read_dir(&dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                
+                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md") {
+                    // Quick check: read just the frontmatter to check ID
+                    if let Ok(Some(memo_id)) = self.extract_memo_id_from_file(&path) {
+                        if memo_id == *id {
+                            // Found the memo, load it fully
+                            return Ok(Some(self.load_memo_from_file(&path)?));
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(None)
+    }
+
+    fn extract_memo_id_from_file(&self, file_path: &Path) -> Result<Option<MemoId>> {
+        let content = fs::read_to_string(file_path)?;
+        
+        if !content.starts_with("---\n") {
+            return Ok(None);
+        }
+        
+        let mut parts = content.splitn(3, "---\n");
+        parts.next(); // skip the first empty part
+        
+        let frontmatter = parts.next()
+            .ok_or(MemoStoreError::MissingFrontmatter { 
+                file: file_path.display().to_string() 
+            })?;
+        
+        // Parse just the id field from the frontmatter
+        let value: serde_json::Value = serde_json::from_str(frontmatter)
+            .map_err(|e| MemoStoreError::InvalidFrontmatter { 
+                file: file_path.display().to_string(),
+                source: e 
+            })?;
+        
+        if let Some(id_str) = value.get("id").and_then(|v| v.as_str()) {
+            if let Ok(ulid) = id_str.parse::<ulid::Ulid>() {
+                return Ok(Some(MemoId::from_ulid(ulid)));
+            }
+        }
+        
+        Ok(None)
     }
 
     pub fn create_memo(&self, title: String, content: String) -> Result<Memo> {
         let memoranda_dirs = self.find_memoranda_dirs()?;
         let target_dir = memoranda_dirs.first()
-            .ok_or_else(|| anyhow!("No .memoranda directories found"))?;
+            .ok_or(MemoStoreError::NoMemorandaDirectories)?;
         
         let filename = sanitize_filename(&title);
-        let file_path = target_dir.join(format!("{}.md", filename));
+        let file_path = target_dir.join(format!("{filename}.md"));
         
-        let memo = Memo::with_file_path(title, content.clone(), Some(file_path.clone()));
+        let memo = Memo::with_file_path(title, content.clone(), Some(file_path.clone()))?;
         
         self.save_memo_to_file(&memo, &file_path)?;
         
@@ -114,9 +220,9 @@ impl MemoStore {
 
     pub fn update_memo(&self, id: &MemoId, content: String) -> Result<Memo> {
         let mut memo = self.get_memo(id)?
-            .ok_or_else(|| anyhow!("Memo not found"))?;
+            .ok_or(MemoStoreError::MemoNotFound { id: id.to_string() })?;
         
-        memo.update_content(content);
+        memo.update_content(content)?;
         
         if let Some(file_path) = &memo.file_path {
             self.save_memo_to_file(&memo, file_path)?;
@@ -127,7 +233,7 @@ impl MemoStore {
 
     pub fn delete_memo(&self, id: &MemoId) -> Result<()> {
         let memo = self.get_memo(id)?
-            .ok_or_else(|| anyhow!("Memo not found"))?;
+            .ok_or(MemoStoreError::MemoNotFound { id: id.to_string() })?;
         
         if let Some(file_path) = &memo.file_path {
             fs::remove_file(file_path)?;
@@ -140,27 +246,53 @@ impl MemoStore {
         let content = fs::read_to_string(file_path)?;
         
         // Try to parse frontmatter
-        if content.starts_with("---\n") {
-            let mut parts = content.splitn(3, "---\n");
-            parts.next(); // skip the first empty part
-            
-            if let Some(frontmatter) = parts.next() {
-                if let Some(_body) = parts.next() {
-                    // Parse frontmatter as JSON
-                    if let Ok(memo) = serde_json::from_str::<Memo>(frontmatter) {
-                        let mut memo_with_path = memo;
-                        memo_with_path.file_path = Some(file_path.to_path_buf());
-                        return Ok(memo_with_path);
-                    }
-                }
+        match self.parse_frontmatter(&content) {
+            Ok(Some(mut memo)) => {
+                memo.file_path = Some(file_path.to_path_buf());
+                Ok(memo)
+            },
+            Ok(None) => {
+                // No frontmatter found, create new memo from content
+                let title = extract_title_from_filename(file_path);
+                let memo = Memo::with_file_path(title, content, Some(file_path.to_path_buf()))?;
+                Ok(memo)
+            },
+            Err(e) => {
+                warn!("Failed to parse frontmatter in {}: {}", file_path.display(), e);
+                // Fallback: create new memo from content
+                let title = extract_title_from_filename(file_path);
+                let memo = Memo::with_file_path(title, content, Some(file_path.to_path_buf()))?;
+                Ok(memo)
             }
         }
+    }
+
+    fn parse_frontmatter(&self, content: &str) -> Result<Option<Memo>> {
+        if !content.starts_with("---\n") {
+            return Ok(None);
+        }
         
-        // Fallback: create new memo from content
-        let title = extract_title_from_filename(file_path);
-        let memo = Memo::with_file_path(title, content, Some(file_path.to_path_buf()));
+        let mut parts = content.splitn(3, "---\n");
+        parts.next(); // skip the first empty part
         
-        Ok(memo)
+        let frontmatter = parts.next()
+            .ok_or(MemoStoreError::MissingFrontmatter { 
+                file: "unknown".to_string() 
+            })?;
+        
+        let _body = parts.next()
+            .ok_or(MemoStoreError::MissingFrontmatter { 
+                file: "unknown".to_string() 
+            })?;
+        
+        // Parse frontmatter as JSON
+        let memo = serde_json::from_str::<Memo>(frontmatter)
+            .map_err(|e| MemoStoreError::InvalidFrontmatter { 
+                file: "unknown".to_string(),
+                source: e 
+            })?;
+        
+        Ok(Some(memo))
     }
 
     fn save_memo_to_file(&self, memo: &Memo, file_path: &Path) -> Result<()> {
@@ -175,7 +307,18 @@ impl MemoStore {
         let frontmatter = serde_json::to_string_pretty(&memo_for_serialization)?;
         let file_content = format!("---\n{}\n---\n{}", frontmatter, memo.content);
         
-        fs::write(file_path, file_content)?;
+        // Atomic write: write to temporary file first, then rename
+        let temp_file_path = file_path.with_extension("md.tmp");
+        
+        // Write to temporary file
+        fs::write(&temp_file_path, &file_content)?;
+        
+        // Atomically rename temporary file to final destination
+        fs::rename(&temp_file_path, file_path)
+            .inspect_err(|_| {
+                // Clean up temporary file on failure
+                let _ = fs::remove_file(&temp_file_path);
+            })?;
         
         Ok(())
     }
@@ -213,7 +356,7 @@ pub fn find_git_root() -> Result<PathBuf> {
         
         match dir.parent() {
             Some(parent) => dir = parent,
-            None => return Err(anyhow!("No git repository found")),
+            None => return Err(MemoStoreError::GitNotFound),
         }
     }
 }
@@ -231,7 +374,7 @@ mod tests {
     #[test]
     fn test_store_and_retrieve_memo() {
         let mut storage = MemoStorage::new();
-        let memo = Memo::new("Test".to_string(), "Content".to_string());
+        let memo = Memo::new("Test".to_string(), "Content".to_string()).unwrap();
         let memo_id = memo.id;
         
         storage.store_memo(memo).unwrap();
@@ -244,8 +387,8 @@ mod tests {
     #[test]
     fn test_list_memos() {
         let mut storage = MemoStorage::new();
-        let memo1 = Memo::new("Test1".to_string(), "Content1".to_string());
-        let memo2 = Memo::new("Test2".to_string(), "Content2".to_string());
+        let memo1 = Memo::new("Test1".to_string(), "Content1".to_string()).unwrap();
+        let memo2 = Memo::new("Test2".to_string(), "Content2".to_string()).unwrap();
         
         storage.store_memo(memo1).unwrap();
         storage.store_memo(memo2).unwrap();
@@ -257,7 +400,7 @@ mod tests {
     #[test]
     fn test_remove_memo() {
         let mut storage = MemoStorage::new();
-        let memo = Memo::new("Test".to_string(), "Content".to_string());
+        let memo = Memo::new("Test".to_string(), "Content".to_string()).unwrap();
         let memo_id = memo.id;
         
         storage.store_memo(memo).unwrap();

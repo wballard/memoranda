@@ -14,23 +14,24 @@ pub struct McpServer {
 impl McpServer {
     pub fn new(name: String) -> Self {
         info!("Creating MCP server: {}", name);
-        let mut tools = Vec::new();
-        tools.push(McpTool::new(
-            "create_memo".to_string(),
-            "Create a new memo with title and content".to_string(),
-        ));
-        tools.push(McpTool::new(
-            "list_memos".to_string(),
-            "List all stored memos".to_string(),
-        ));
-        tools.push(McpTool::new(
-            "get_memo".to_string(),
-            "Get a specific memo by ID".to_string(),
-        ));
-        tools.push(McpTool::new(
-            "delete_memo".to_string(),
-            "Delete a memo by ID".to_string(),
-        ));
+        let tools = vec![
+            McpTool::new(
+                "create_memo".to_string(),
+                "Create a new memo with title and content".to_string(),
+            ),
+            McpTool::new(
+                "list_memos".to_string(),
+                "List all stored memos".to_string(),
+            ),
+            McpTool::new(
+                "get_memo".to_string(),
+                "Get a specific memo by ID".to_string(),
+            ),
+            McpTool::new(
+                "delete_memo".to_string(),
+                "Delete a memo by ID".to_string(),
+            ),
+        ];
         
         Self {
             name,
@@ -66,7 +67,7 @@ impl McpServer {
             }
         });
         
-        println!("{}", server_info);
+        println!("{server_info}");
         
         // Process incoming messages
         loop {
@@ -84,7 +85,7 @@ impl McpServer {
                         "jsonrpc": "2.0",
                         "result": "ok"
                     });
-                    println!("{}", response);
+                    println!("{response}");
                 }
                 Err(e) => {
                     info!("Error reading from stdin: {}", e);

@@ -19,12 +19,12 @@ pub enum MemorandaError {
 impl fmt::Display for MemorandaError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            MemorandaError::Config(msg) => write!(f, "Configuration error: {}", msg),
-            MemorandaError::Storage(msg) => write!(f, "Storage error: {}", msg),
-            MemorandaError::McpServer(msg) => write!(f, "MCP server error: {}", msg),
-            MemorandaError::Io(err) => write!(f, "IO error: {}", err),
-            MemorandaError::Json(err) => write!(f, "JSON error: {}", err),
-            MemorandaError::Validation(msg) => write!(f, "Validation error: {}", msg),
+            MemorandaError::Config(msg) => write!(f, "Configuration error: {msg}"),
+            MemorandaError::Storage(msg) => write!(f, "Storage error: {msg}"),
+            MemorandaError::McpServer(msg) => write!(f, "MCP server error: {msg}"),
+            MemorandaError::Io(err) => write!(f, "IO error: {err}"),
+            MemorandaError::Json(err) => write!(f, "JSON error: {err}"),
+            MemorandaError::Validation(msg) => write!(f, "Validation error: {msg}"),
         }
     }
 }
