@@ -75,7 +75,8 @@ async fn run_cli() -> Result<()> {
                 .map_err(|e| wrap_command_error("Doctor command", e))?;
         }
         Some(Commands::Serve) => {
-            let server = McpServer::new("memoranda".to_string());
+            let server = McpServer::new("memoranda".to_string())
+                .map_err(|e| wrap_command_error("MCP server initialization", e))?;
             server
                 .start()
                 .await

@@ -68,3 +68,35 @@ Implement the core MCP server functionality using the MCP SDK, providing tools f
 - Handle Unicode content properly in memos
 - Ensure thread safety for concurrent operations
 - Follow the patterns from successful Rust MCP servers
+
+## Proposed Solution
+
+Based on the current code analysis, I need to implement the following:
+
+1. **Fix the MCP Server Structure:**
+   - Use `MemoStore` (file-based) instead of `MemoStorage` (in-memory)
+   - Update server to handle `tools/call` requests
+   - Add missing tools (update_memo, search_memos, get_all_context)
+   - Make tool schemas more robust and complete
+
+2. **Implement Missing Tools:**
+   - `update_memo`: Update existing memo content by ID
+   - `search_memos`: Search memo content by text pattern
+   - `get_all_context`: Combine all memos for LLM context
+
+3. **Improve Tool Execution:**
+   - Replace stub implementations with actual memo operations
+   - Add proper error handling and JSON responses
+   - Implement proper parameter validation
+
+4. **Add Comprehensive Tool Schemas:**
+   - Complete JSON schemas for all tools
+   - Add proper parameter validation
+   - Include descriptions and examples
+
+5. **Test Implementation:**
+   - Create comprehensive tests for all tools
+   - Test MCP protocol compliance
+   - Test error handling scenarios
+
+The implementation will use Test-Driven Development to ensure all functionality works correctly.

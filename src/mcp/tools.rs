@@ -1,6 +1,5 @@
 use anyhow::Result;
 use serde_json::Value;
-use std::collections::HashMap;
 use tracing::info;
 
 #[derive(Debug, Clone)]
@@ -25,122 +24,103 @@ impl McpTool {
     pub fn to_tool_definition(&self) -> ToolDefinition {
         let schema = match self.name.as_str() {
             "create_memo" => {
-                let mut properties = HashMap::new();
-                properties.insert(
-                    "title".to_string(),
-                    Value::Object({
-                        let mut obj = serde_json::Map::new();
-                        obj.insert("type".to_string(), Value::String("string".to_string()));
-                        obj.insert(
-                            "description".to_string(),
-                            Value::String("The title of the memo".to_string()),
-                        );
-                        obj
-                    }),
-                );
-                properties.insert(
-                    "content".to_string(),
-                    Value::Object({
-                        let mut obj = serde_json::Map::new();
-                        obj.insert("type".to_string(), Value::String("string".to_string()));
-                        obj.insert(
-                            "description".to_string(),
-                            Value::String("The content of the memo".to_string()),
-                        );
-                        obj
-                    }),
-                );
-
-                Value::Object({
-                    let mut obj = serde_json::Map::new();
-                    obj.insert("type".to_string(), Value::String("object".to_string()));
-                    obj.insert(
-                        "properties".to_string(),
-                        Value::Object({
-                            let mut props = serde_json::Map::new();
-                            for (k, v) in properties {
-                                props.insert(k, v);
-                            }
-                            props
-                        }),
-                    );
-                    obj.insert(
-                        "required".to_string(),
-                        Value::Array(vec![
-                            Value::String("title".to_string()),
-                            Value::String("content".to_string()),
-                        ]),
-                    );
-                    obj
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "title": {
+                            "type": "string",
+                            "description": "The title of the memo",
+                            "minLength": 1,
+                            "maxLength": 255
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "The content of the memo",
+                            "maxLength": 1048576
+                        }
+                    },
+                    "required": ["title", "content"]
                 })
             }
-            "get_memo" => Value::Object({
-                let mut obj = serde_json::Map::new();
-                obj.insert("type".to_string(), Value::String("object".to_string()));
-                obj.insert(
-                    "properties".to_string(),
-                    Value::Object({
-                        let mut props = serde_json::Map::new();
-                        props.insert(
-                            "id".to_string(),
-                            Value::Object({
-                                let mut id_obj = serde_json::Map::new();
-                                id_obj.insert(
-                                    "type".to_string(),
-                                    Value::String("string".to_string()),
-                                );
-                                id_obj.insert(
-                                    "description".to_string(),
-                                    Value::String("The ID of the memo to retrieve".to_string()),
-                                );
-                                id_obj
-                            }),
-                        );
-                        props
-                    }),
-                );
-                obj.insert(
-                    "required".to_string(),
-                    Value::Array(vec![Value::String("id".to_string())]),
-                );
-                obj
-            }),
-            "delete_memo" => Value::Object({
-                let mut obj = serde_json::Map::new();
-                obj.insert("type".to_string(), Value::String("object".to_string()));
-                obj.insert(
-                    "properties".to_string(),
-                    Value::Object({
-                        let mut props = serde_json::Map::new();
-                        props.insert(
-                            "id".to_string(),
-                            Value::Object({
-                                let mut id_obj = serde_json::Map::new();
-                                id_obj.insert(
-                                    "type".to_string(),
-                                    Value::String("string".to_string()),
-                                );
-                                id_obj.insert(
-                                    "description".to_string(),
-                                    Value::String("The ID of the memo to delete".to_string()),
-                                );
-                                id_obj
-                            }),
-                        );
-                        props
-                    }),
-                );
-                obj.insert(
-                    "required".to_string(),
-                    Value::Array(vec![Value::String("id".to_string())]),
-                );
-                obj
-            }),
-            _ => Value::Object({
-                let mut obj = serde_json::Map::new();
-                obj.insert("type".to_string(), Value::String("object".to_string()));
-                obj
-            }),
+            "update_memo" => {
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "description": "The ID of the memo to update",
+                            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "The new content of the memo",
+                            "maxLength": 1048576
+                        }
+                    },
+                    "required": ["id", "content"]
+                })
+            }
+            "list_memos" => {
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                })
+            }
+            "get_memo" => {
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "description": "The ID of the memo to retrieve",
+                            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+                        }
+                    },
+                    "required": ["id"]
+                })
+            }
+            "delete_memo" => {
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "description": "The ID of the memo to delete",
+                            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+                        }
+                    },
+                    "required": ["id"]
+                })
+            }
+            "search_memos" => {
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The search query to match against memo titles and content",
+                            "minLength": 1,
+                            "maxLength": 1000
+                        }
+                    },
+                    "required": ["query"]
+                })
+            }
+            "get_all_context" => {
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                })
+            }
+            _ => {
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                })
+            }
         };
 
         ToolDefinition {
@@ -152,12 +132,7 @@ impl McpTool {
 
     pub async fn execute(&self, _args: Value) -> Result<String> {
         info!("Executing MCP tool: {}", self.name);
-        match self.name.as_str() {
-            "create_memo" => Ok("Memo creation tool executed".to_string()),
-            "list_memos" => Ok("Memo listing tool executed".to_string()),
-            "get_memo" => Ok("Memo retrieval tool executed".to_string()),
-            "delete_memo" => Ok("Memo deletion tool executed".to_string()),
-            _ => Ok(format!("Tool {} executed successfully", self.name)),
-        }
+        // Tool execution is now handled by the server's execute_tool method
+        Ok(format!("Tool {} executed successfully", self.name))
     }
 }
