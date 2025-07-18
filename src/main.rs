@@ -17,7 +17,15 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Check system health and configuration
-    Doctor,
+    Doctor {
+        /// Show verbose output with detailed information
+        #[arg(long)]
+        verbose: bool,
+        
+        /// Attempt to automatically fix issues
+        #[arg(long)]
+        auto_fix: bool,
+    },
     /// Start the MCP server
     Serve,
 }
@@ -67,8 +75,8 @@ async fn run_cli() -> Result<()> {
         Settings::new().map_err(|e| anyhow::anyhow!("Failed to initialize settings: {e}"))?;
 
     match &cli.command {
-        Some(Commands::Doctor) => {
-            let doctor = DoctorCommand::new();
+        Some(Commands::Doctor { verbose, auto_fix }) => {
+            let doctor = DoctorCommand::with_options(*verbose, *auto_fix);
             doctor
                 .run()
                 .await
