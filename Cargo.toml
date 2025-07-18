@@ -49,3 +49,18 @@ colored = "2.0"
 # Testing utilities
 tempfile = "3.8"
 tokio-test = "0.4"
+# Property-based testing
+proptest = "1.4"
+# Performance benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+# Test assertions
+assert_cmd = "2.0"
+predicates = "3.0"
+# JSON schema validation
+jsonschema = "0.18"
+# Mock testing utilities
+mockall = "0.12"
+# Test fixtures and randomization
+fake = { version = "2.9", features = ["derive"] }
+# Async testing
+

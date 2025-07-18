@@ -52,12 +52,22 @@ impl Settings {
             ));
         }
 
-        // Validate that the minimum Rust version is parseable
-        if semver::Version::parse(&self.minimum_rust_version).is_err() {
-            return Err(MemorandaError::Validation(format!(
-                "Invalid minimum Rust version format: {}. Must be in semver format (e.g., 1.70.0)",
-                self.minimum_rust_version
-            )));
+        // Validate that the minimum Rust version is parseable and is a stable version
+        match semver::Version::parse(&self.minimum_rust_version) {
+            Ok(version) => {
+                if !version.pre.is_empty() || !version.build.is_empty() {
+                    return Err(MemorandaError::Validation(format!(
+                        "Invalid minimum Rust version format: {}. Must be a stable version (e.g., 1.70.0), pre-release and build metadata are not allowed",
+                        self.minimum_rust_version
+                    )));
+                }
+            }
+            Err(_) => {
+                return Err(MemorandaError::Validation(format!(
+                    "Invalid minimum Rust version format: {}. Must be in semver format (e.g., 1.70.0)",
+                    self.minimum_rust_version
+                )));
+            }
         }
 
         if self.max_memo_file_size == 0 {
