@@ -389,7 +389,6 @@ impl MemoSearcher {
     }
 
     fn add_snippets(&self, result: &mut SearchResult, query: &SearchQuery) {
-
         if !query.terms.is_empty() {
             for term in &query.terms {
                 if let Some(snippet) =
@@ -419,7 +418,10 @@ impl MemoSearcher {
 
         if let Some(pos) = content_lower.find(&term_lower) {
             let start = pos.saturating_sub(max_length / SNIPPET_CONTEXT_PADDING);
-            let end = std::cmp::min(content.len(), pos + term.len() + max_length / SNIPPET_CONTEXT_PADDING);
+            let end = std::cmp::min(
+                content.len(),
+                pos + term.len() + max_length / SNIPPET_CONTEXT_PADDING,
+            );
 
             let snippet = &content[start..end];
             Some(format!("...{snippet}..."))
@@ -430,12 +432,8 @@ impl MemoSearcher {
 
     fn evaluate_boolean_term(&self, memo: &Memo, term: &SearchTerm) -> Option<f64> {
         match term {
-            SearchTerm::Word(word) => {
-                self.score_term_match_optional(memo, word, 2.0, 1.0)
-            }
-            SearchTerm::Phrase(phrase) => {
-                self.score_term_match_optional(memo, phrase, 3.0, 1.5)
-            }
+            SearchTerm::Word(word) => self.score_term_match_optional(memo, word, 2.0, 1.0),
+            SearchTerm::Phrase(phrase) => self.score_term_match_optional(memo, phrase, 3.0, 1.5),
             SearchTerm::Wildcard(pattern) => {
                 let regex_pattern = self.wildcard_to_regex(pattern);
                 match Regex::new(&regex_pattern) {
@@ -448,7 +446,10 @@ impl MemoSearcher {
                         }
                     }
                     Err(e) => {
-                        warn!("Failed to compile wildcard pattern '{}' as regex '{}': {}", pattern, regex_pattern, e);
+                        warn!(
+                            "Failed to compile wildcard pattern '{}' as regex '{}': {}",
+                            pattern, regex_pattern, e
+                        );
                         None
                     }
                 }
@@ -504,33 +505,45 @@ impl MemoSearcher {
     }
 
     /// Helper method to score a term match against a memo
-    fn score_term_match(&self, memo: &Memo, term: &str, title_score: f64, content_score: f64) -> (f64, bool) {
+    fn score_term_match(
+        &self,
+        memo: &Memo,
+        term: &str,
+        title_score: f64,
+        content_score: f64,
+    ) -> (f64, bool) {
         let term_lower = term.to_lowercase();
         let title_lower = memo.title.to_lowercase();
         let content_lower = memo.content.to_lowercase();
-        
+
         let mut score = 0.0;
         let mut matches = false;
-        
+
         if title_lower.contains(&term_lower) {
             score += title_score;
             matches = true;
         }
-        
+
         if content_lower.contains(&term_lower) {
             score += content_score;
             matches = true;
         }
-        
+
         (score, matches)
     }
 
     /// Helper method to score a term match and return Option<f64> for boolean evaluation
-    fn score_term_match_optional(&self, memo: &Memo, term: &str, title_score: f64, content_score: f64) -> Option<f64> {
+    fn score_term_match_optional(
+        &self,
+        memo: &Memo,
+        term: &str,
+        title_score: f64,
+        content_score: f64,
+    ) -> Option<f64> {
         let term_lower = term.to_lowercase();
         let title_lower = memo.title.to_lowercase();
         let content_lower = memo.content.to_lowercase();
-        
+
         if title_lower.contains(&term_lower) {
             Some(title_score)
         } else if content_lower.contains(&term_lower) {

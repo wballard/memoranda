@@ -21,7 +21,7 @@ enum Commands {
         /// Show verbose output with detailed information
         #[arg(long)]
         verbose: bool,
-        
+
         /// Attempt to automatically fix issues
         #[arg(long)]
         auto_fix: bool,

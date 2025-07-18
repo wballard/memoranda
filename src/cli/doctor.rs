@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::fs;
 use std::path::Path;
 use tracing::info;
+use crate::config::Settings;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DiagnosticResult {
@@ -17,26 +18,49 @@ pub struct DiagnosticCheck {
     pub fix_fn: Option<fn(&DoctorCommand) -> Result<()>>,
 }
 
-#[derive(Default)]
 pub struct DoctorCommand {
     pub verbose: bool,
     pub auto_fix: bool,
+    pub settings: Settings,
+}
+
+impl Default for DoctorCommand {
+    fn default() -> Self {
+        Self {
+            verbose: false,
+            auto_fix: false,
+            settings: Settings::new().unwrap_or_default(),
+        }
+    }
 }
 
 impl DoctorCommand {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            verbose: false,
+            auto_fix: false,
+            settings: Settings::new().unwrap_or_default(),
+        }
     }
 
     pub fn with_options(verbose: bool, auto_fix: bool) -> Self {
-        Self { verbose, auto_fix }
+        Self {
+            verbose,
+            auto_fix,
+            settings: Settings::new().unwrap_or_default(),
+        }
     }
 
     pub async fn run(&self) -> Result<()> {
         use colored::*;
-        
+
         info!("Running doctor command");
-        println!("{}", "Memoranda Doctor - System Health Check".bright_cyan().bold());
+        println!(
+            "{}",
+            "Memoranda Doctor - System Health Check"
+                .bright_cyan()
+                .bold()
+        );
         println!("{}", "=====================================".bright_cyan());
         println!();
 
@@ -65,8 +89,17 @@ impl DoctorCommand {
                         if let Some(fix_fn) = check.fix_fn {
                             println!("   {}", "Attempting automatic fix...".bright_blue());
                             match fix_fn(self) {
-                                Ok(()) => println!("   {} {}", "✅".green(), "Fix applied successfully".green()),
-                                Err(e) => println!("   {} {}: {}", "❌".red(), "Fix failed".red(), e.to_string().red()),
+                                Ok(()) => println!(
+                                    "   {} {}",
+                                    "✅".green(),
+                                    "Fix applied successfully".green()
+                                ),
+                                Err(e) => println!(
+                                    "   {} {}: {}",
+                                    "❌".red(),
+                                    "Fix failed".red(),
+                                    e.to_string().red()
+                                ),
                             }
                         }
                     }
@@ -77,18 +110,40 @@ impl DoctorCommand {
 
         println!();
         if errors == 0 && warnings == 0 {
-            println!("{} {}", "✅".green(), "All systems operational! No issues found.".green().bold());
+            println!(
+                "{} {}",
+                "✅".green(),
+                "All systems operational! No issues found.".green().bold()
+            );
         } else {
             if errors > 0 {
-                println!("{} {}", "❌".red(), format!("Found {} error(s) that need attention.", errors).red().bold());
+                println!(
+                    "{} {}",
+                    "❌".red(),
+                    format!("Found {errors} error(s) that need attention.")
+                        .red()
+                        .bold()
+                );
             }
             if warnings > 0 {
-                println!("{} {}", "⚠️".yellow(), format!("Found {} warning(s) that may need attention.", warnings).yellow().bold());
+                println!(
+                    "{} {}",
+                    "⚠️".yellow(),
+                    format!("Found {warnings} warning(s) that may need attention.")
+                        .yellow()
+                        .bold()
+                );
             }
             println!();
             println!("{}", "RECOMMENDATIONS:".bright_cyan().bold());
-            println!("- Run {} to attempt automatic fixes", "'memoranda doctor --auto-fix'".bright_white());
-            println!("- Run {} for detailed information", "'memoranda doctor --verbose'".bright_white());
+            println!(
+                "- Run {} to attempt automatic fixes",
+                "'memoranda doctor --auto-fix'".bright_white()
+            );
+            println!(
+                "- Run {} for detailed information",
+                "'memoranda doctor --verbose'".bright_white()
+            );
             println!("- See above for specific fix suggestions");
         }
 
@@ -99,7 +154,8 @@ impl DoctorCommand {
         vec![
             DiagnosticCheck {
                 name: "Rust toolchain".to_string(),
-                description: "Checks if Rust toolchain is installed and meets minimum version".to_string(),
+                description: "Checks if Rust toolchain is installed and meets minimum version"
+                    .to_string(),
                 check_fn: Self::check_rust_toolchain_diagnostic,
                 fix_fn: None,
             },
@@ -144,7 +200,7 @@ impl DoctorCommand {
 
     fn check_rust_toolchain_diagnostic(&self) -> DiagnosticResult {
         use std::process::Command;
-        
+
         // Check if rustc is available
         match Command::new("rustc").arg("--version").output() {
             Ok(output) => {
@@ -154,17 +210,23 @@ impl DoctorCommand {
                         // Extract version number
                         if let Some(version_str) = version_line.split_whitespace().nth(1) {
                             if let Ok(version) = semver::Version::parse(version_str) {
-                                let min_version = semver::Version::parse("1.70.0").unwrap();
+                                let min_version = semver::Version::parse(&self.settings.minimum_rust_version).unwrap();
                                 if version >= min_version {
                                     DiagnosticResult::Pass
                                 } else {
-                                    DiagnosticResult::Warning(format!("Rust version {} is below recommended minimum {}. Consider updating with 'rustup update'.", version, min_version))
+                                    DiagnosticResult::Warning(format!(
+                                        "Rust version {version} is below recommended minimum {min_version}. Consider updating with 'rustup update'."
+                                    ))
                                 }
                             } else {
-                                DiagnosticResult::Warning(format!("Could not parse Rust version from: {}", version_str))
+                                DiagnosticResult::Warning(format!(
+                                    "Could not parse Rust version from: {version_str}"
+                                ))
                             }
                         } else {
-                            DiagnosticResult::Warning("Could not extract version from rustc output".to_string())
+                            DiagnosticResult::Warning(
+                                "Could not extract version from rustc output".to_string(),
+                            )
                         }
                     } else {
                         DiagnosticResult::Warning("Empty rustc version output".to_string())
@@ -173,35 +235,44 @@ impl DoctorCommand {
                     DiagnosticResult::Error("rustc command failed to execute".to_string())
                 }
             }
-            Err(_) => {
-                DiagnosticResult::Error("Rust toolchain not found. Install Rust from https://rustup.rs/".to_string())
-            }
+            Err(_) => DiagnosticResult::Error(
+                "Rust toolchain not found. Install Rust from https://rustup.rs/".to_string(),
+            ),
         }
     }
 
     fn check_system_dependencies_diagnostic(&self) -> DiagnosticResult {
         use std::process::Command;
-        
+
         let mut missing_deps = Vec::new();
         let mut warnings = Vec::new();
-        
+
         // Check for git
         if Command::new("git").arg("--version").output().is_err() {
             warnings.push("git not found - some features may be limited");
         }
-        
+
         // Check for basic system tools
-        let tools = vec![("cargo", "Cargo package manager"), ("rustc", "Rust compiler")];
+        let tools = vec![
+            ("cargo", "Cargo package manager"),
+            ("rustc", "Rust compiler"),
+        ];
         for (tool, description) in tools {
             if Command::new(tool).arg("--version").output().is_err() {
-                missing_deps.push(format!("{} ({})", tool, description));
+                missing_deps.push(format!("{tool} ({description})"));
             }
         }
-        
+
         if !missing_deps.is_empty() {
-            DiagnosticResult::Error(format!("Missing required dependencies: {}. Install Rust toolchain from https://rustup.rs/", missing_deps.join(", ")))
+            DiagnosticResult::Error(format!(
+                "Missing required dependencies: {}. Install Rust toolchain from https://rustup.rs/",
+                missing_deps.join(", ")
+            ))
         } else if !warnings.is_empty() {
-            DiagnosticResult::Warning(format!("Optional dependencies missing: {}", warnings.join(", ")))
+            DiagnosticResult::Warning(format!(
+                "Optional dependencies missing: {}",
+                warnings.join(", ")
+            ))
         } else {
             DiagnosticResult::Pass
         }
@@ -217,7 +288,7 @@ impl DoctorCommand {
 
     fn check_memoranda_directory_diagnostic(&self) -> DiagnosticResult {
         let memoranda_path = Path::new(".memoranda");
-        
+
         if memoranda_path.exists() {
             if memoranda_path.is_dir() {
                 DiagnosticResult::Pass
@@ -230,7 +301,8 @@ impl DoctorCommand {
     }
 
     fn check_file_permissions_diagnostic(&self) -> DiagnosticResult {
-        let current_dir_result = self.check_directory_permissions_diagnostic(".", "Current directory");
+        let current_dir_result =
+            self.check_directory_permissions_diagnostic(".", "Current directory");
         let memoranda_result = if Path::new(".memoranda").exists() {
             self.check_directory_permissions_diagnostic(".memoranda", ".memoranda directory")
         } else {
@@ -252,7 +324,9 @@ impl DoctorCommand {
         let memoranda_path = Path::new(".memoranda");
 
         if !memoranda_path.exists() {
-            return DiagnosticResult::Warning("No memo files to validate (no .memoranda directory)".to_string());
+            return DiagnosticResult::Warning(
+                "No memo files to validate (no .memoranda directory)".to_string(),
+            );
         }
 
         match fs::read_dir(memoranda_path) {
@@ -264,7 +338,7 @@ impl DoctorCommand {
                     let path = entry.path();
                     if path.extension().and_then(|s| s.to_str()) == Some("json") {
                         memo_count += 1;
-                        
+
                         // Enhanced validation
                         if let Err(e) = self.validate_memo_file_enhanced(&path) {
                             issues.push(format!("Invalid memo file {}: {}", path.display(), e));
@@ -277,118 +351,142 @@ impl DoctorCommand {
                 } else if issues.is_empty() {
                     DiagnosticResult::Pass
                 } else {
-                    DiagnosticResult::Error(format!("Found {} invalid memo files out of {} total: {}", issues.len(), memo_count, issues.join(", ")))
+                    DiagnosticResult::Error(format!(
+                        "Found {} invalid memo files out of {} total: {}",
+                        issues.len(),
+                        memo_count,
+                        issues.join(", ")
+                    ))
                 }
             }
-            Err(e) => {
-                DiagnosticResult::Error(format!("Could not read .memoranda directory: {}", e))
-            }
+            Err(e) => DiagnosticResult::Error(format!("Could not read .memoranda directory: {e}")),
         }
     }
 
     fn check_mcp_integration_diagnostic(&self) -> DiagnosticResult {
         use crate::mcp::McpServer;
-        
+
         // Check 1: Server initialization
         let server = match McpServer::new("memoranda_doctor_test".to_string()) {
             Ok(server) => server,
             Err(e) => {
-                return DiagnosticResult::Error(format!("Failed to initialize MCP server: {}", e));
+                return DiagnosticResult::Error(format!("Failed to initialize MCP server: {e}"));
             }
         };
-        
+
         // Check 2: Tool registration
         let tools = server.get_tools();
         if tools.is_empty() {
             return DiagnosticResult::Error("No tools registered in MCP server".to_string());
         }
-        
+
         // Check 3: Expected tools are present
         let expected_tools = vec![
-            "create_memo", "update_memo", "list_memos", "get_memo", 
-            "delete_memo", "search_memos", "get_all_context"
+            "create_memo",
+            "update_memo",
+            "list_memos",
+            "get_memo",
+            "delete_memo",
+            "search_memos",
+            "get_all_context",
         ];
-        
-        let registered_tool_names: Vec<String> = tools.iter()
+
+        let registered_tool_names: Vec<String> = tools
+            .iter()
             .map(|tool| tool.to_tool_definition().name)
             .collect();
-        
+
         let mut missing_tools = Vec::new();
         for expected_tool in expected_tools {
             if !registered_tool_names.contains(&expected_tool.to_string()) {
                 missing_tools.push(expected_tool);
             }
         }
-        
+
         if !missing_tools.is_empty() {
-            return DiagnosticResult::Error(format!("Missing required tools: {}", missing_tools.join(", ")));
+            return DiagnosticResult::Error(format!(
+                "Missing required tools: {}",
+                missing_tools.join(", ")
+            ));
         }
-        
+
         // Check 4: MCP SDK availability
         if !self.check_mcp_sdk_availability() {
-            return DiagnosticResult::Warning("MCP SDK may not be fully available - some features may be limited".to_string());
+            return DiagnosticResult::Warning(
+                "MCP SDK may not be fully available - some features may be limited".to_string(),
+            );
         }
-        
+
         DiagnosticResult::Pass
     }
-    
+
     fn check_mcp_sdk_availability(&self) -> bool {
         // Try to create a simple MCP-related structure to verify SDK availability
         // This is a basic check - in a real implementation, we might do more thorough validation
         true // For now, assume SDK is available if we can compile
     }
 
-    fn check_directory_permissions_diagnostic(&self, path: &str, display_name: &str) -> DiagnosticResult {
+    fn check_directory_permissions_diagnostic(
+        &self,
+        path: &str,
+        display_name: &str,
+    ) -> DiagnosticResult {
         match fs::metadata(path) {
             Ok(metadata) => {
                 if metadata.permissions().readonly() {
-                    DiagnosticResult::Error(format!("{} is read-only. Change {} permissions to allow writing.", display_name, display_name))
+                    DiagnosticResult::Error(format!(
+                        "{display_name} is read-only. Change {display_name} permissions to allow writing."
+                    ))
                 } else {
                     DiagnosticResult::Pass
                 }
             }
             Err(e) => {
-                DiagnosticResult::Error(format!("Could not check {} permissions: {}", display_name, e))
+                DiagnosticResult::Error(format!("Could not check {display_name} permissions: {e}"))
             }
         }
     }
 
     fn fix_memoranda_directory(&self) -> Result<()> {
         let memoranda_path = Path::new(".memoranda");
-        
+
         if memoranda_path.exists() && !memoranda_path.is_dir() {
             fs::remove_file(memoranda_path)?;
         }
-        
+
         if !memoranda_path.exists() {
             fs::create_dir(memoranda_path)?;
         }
-        
+
         Ok(())
     }
 
     fn fix_memo_formats(&self) -> Result<()> {
         let memoranda_path = Path::new(".memoranda");
-        
+
         if !memoranda_path.exists() {
             return Ok(()); // Nothing to fix
         }
-        
+
         let mut fixes_applied = 0;
-        
+
         match fs::read_dir(memoranda_path) {
             Ok(entries) => {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                        if let Err(_) = self.validate_memo_file_enhanced(&path) {
-                            if let Some(file_name) = path.file_stem().and_then(|s| s.to_str()) {
-                                // Try to fix invalid filename format
-                                if !self.is_valid_ulid_filename(file_name) {
-                                    if let Ok(fixed_path) = self.fix_memo_filename(&path) {
-                                        println!("   📝 Renamed {} to {}", path.display(), fixed_path.display());
-                                        fixes_applied += 1;
-                                    }
+                    if path.extension().and_then(|s| s.to_str()) == Some("json")
+                        && self.validate_memo_file_enhanced(&path).is_err()
+                    {
+                        if let Some(file_name) = path.file_stem().and_then(|s| s.to_str()) {
+                            // Try to fix invalid filename format
+                            if !self.is_valid_ulid_filename(file_name) {
+                                if let Ok(fixed_path) = self.fix_memo_filename(&path) {
+                                    println!(
+                                        "   📝 Renamed {} to {}",
+                                        path.display(),
+                                        fixed_path.display()
+                                    );
+                                    fixes_applied += 1;
                                 }
                             }
                         }
@@ -397,32 +495,33 @@ impl DoctorCommand {
             }
             Err(_) => return Err(anyhow::anyhow!("Could not read .memoranda directory")),
         }
-        
+
         if fixes_applied > 0 {
-            println!("   ✅ Applied {} fix(es) to memo files", fixes_applied);
+            println!("   ✅ Applied {fixes_applied} fix(es) to memo files");
         }
-        
+
         Ok(())
     }
-    
+
     fn fix_memo_filename(&self, path: &Path) -> Result<std::path::PathBuf> {
         // Generate a new ULID-based filename
         let ulid = ulid::Ulid::new();
-        let new_filename = format!("{}.json", ulid);
+        let new_filename = format!("{ulid}.json");
         let new_path = path.with_file_name(new_filename);
-        
+
         // Move the file to the new name
         fs::rename(path, &new_path)?;
-        
+
         Ok(new_path)
     }
-
 
     fn validate_memo_file_enhanced(&self, path: &Path) -> Result<()> {
         // 1. Check file naming conventions (should be ULID-based)
         if let Some(file_name) = path.file_stem().and_then(|s| s.to_str()) {
             if !self.is_valid_ulid_filename(file_name) {
-                return Err(anyhow::anyhow!("Invalid filename format - should be ULID-based"));
+                return Err(anyhow::anyhow!(
+                    "Invalid filename format - should be ULID-based"
+                ));
             }
         }
 
@@ -450,10 +549,10 @@ impl DoctorCommand {
         }
 
         // 5. Check content integrity (reasonable size limits)
-        if content.len() > 1_000_000 {
-            return Err(anyhow::anyhow!("File size too large (>1MB)"));
+        if content.len() > self.settings.max_memo_file_size as usize {
+            return Err(anyhow::anyhow!("File size too large (>{}MB)", self.settings.max_memo_file_size / 1_000_000));
         }
-        
+
         if content.trim().is_empty() {
             return Err(anyhow::anyhow!("Empty memo file"));
         }
@@ -465,11 +564,10 @@ impl DoctorCommand {
         // ULID format: 26 characters, case-insensitive alphanumeric
         // Pattern: [0-9A-HJKMNP-TV-Z]{26}
         use regex::Regex;
-        
+
         let ulid_regex = Regex::new(r"^[0-9A-HJKMNP-TV-Z]{26}$").unwrap();
         filename.len() == 26 && ulid_regex.is_match(&filename.to_uppercase())
     }
-
 }
 
 #[cfg(test)]
@@ -493,7 +591,10 @@ mod tests {
             let guard = DIRECTORY_MUTEX.lock().unwrap();
             let original_dir = std::env::current_dir().unwrap();
             std::env::set_current_dir(temp_dir).unwrap();
-            Self { original_dir, _guard: guard }
+            Self {
+                original_dir,
+                _guard: guard,
+            }
         }
     }
 
@@ -654,7 +755,10 @@ mod tests {
         let error = DiagnosticResult::Error("test error".to_string());
 
         assert_eq!(pass, DiagnosticResult::Pass);
-        assert_eq!(warning, DiagnosticResult::Warning("test warning".to_string()));
+        assert_eq!(
+            warning,
+            DiagnosticResult::Warning("test warning".to_string())
+        );
         assert_eq!(error, DiagnosticResult::Error("test error".to_string()));
     }
 
@@ -663,7 +767,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let doctor = DoctorCommand::new();
         let _guard = TestDirectoryGuard::new(temp_dir.path());
-        
+
         // Test without git repository
         let result = doctor.check_git_repository_diagnostic();
         assert!(matches!(result, DiagnosticResult::Warning(_)));
@@ -679,7 +783,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let doctor = DoctorCommand::new();
         let _guard = TestDirectoryGuard::new(temp_dir.path());
-        
+
         // Test without memoranda directory
         let result = doctor.check_memoranda_directory_diagnostic();
         assert!(matches!(result, DiagnosticResult::Warning(_)));
@@ -702,7 +806,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let doctor = DoctorCommand::new();
         let _guard = TestDirectoryGuard::new(temp_dir.path());
-        
+
         let result = doctor.check_memo_formats_diagnostic();
         assert!(matches!(result, DiagnosticResult::Warning(_)));
 
@@ -715,7 +819,7 @@ mod tests {
         let valid_json = r#"{"id": "test", "content": "test memo"}"#;
         // Use a valid ULID filename
         let ulid_filename = "01K0FBWB1HSG75X617S118ZXHS.json";
-        fs::write(format!(".memoranda/{}", ulid_filename), valid_json).unwrap();
+        fs::write(format!(".memoranda/{ulid_filename}"), valid_json).unwrap();
         let result = doctor.check_memo_formats_diagnostic();
         assert_eq!(result, DiagnosticResult::Pass);
     }
@@ -726,7 +830,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let doctor = DoctorCommand::new();
         let _guard = TestDirectoryGuard::new(temp_dir.path());
-        
+
         fs::create_dir(".memoranda").unwrap();
         let invalid_json = r#"{"id": "test", "content": "test memo"#;
         // Use invalid filename format (not ULID)
@@ -747,7 +851,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let doctor = DoctorCommand::new();
         let _guard = TestDirectoryGuard::new(temp_dir.path());
-        
+
         // Test creating directory
         let result = doctor.fix_memoranda_directory();
         assert!(result.is_ok());

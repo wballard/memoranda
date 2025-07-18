@@ -346,7 +346,7 @@ impl MemoStore {
     pub fn search_memos(&self, query: &str) -> Result<Vec<SearchResult>> {
         let memos = self.list_memos()?;
         self.ensure_index_updated(&memos)?;
-        
+
         let searcher = self.searcher.read().unwrap();
         let search_query = SearchQuery::parse_query(query);
         let results = searcher.search(&search_query, &memos);
@@ -357,7 +357,7 @@ impl MemoStore {
     pub fn search_memos_with_query(&self, query: &SearchQuery) -> Result<Vec<SearchResult>> {
         let memos = self.list_memos()?;
         self.ensure_index_updated(&memos)?;
-        
+
         let searcher = self.searcher.read().unwrap();
         let results = searcher.search(query, &memos);
 
@@ -374,19 +374,19 @@ impl MemoStore {
     /// Ensures the search index is up-to-date with the current memos
     fn ensure_index_updated(&self, memos: &[Memo]) -> Result<()> {
         let is_dirty = *self.index_dirty.read().unwrap();
-        
+
         if is_dirty {
             let mut searcher = self.searcher.write().unwrap();
             *searcher = MemoSearcher::new();
-            
+
             // Re-index all memos
             for memo in memos {
                 searcher.index_memo(memo);
             }
-            
+
             *self.index_dirty.write().unwrap() = false;
         }
-        
+
         Ok(())
     }
 
