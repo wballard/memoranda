@@ -1,14 +1,17 @@
 use anyhow::Result;
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::signal;
 use tracing::{error, info, warn};
 
 use super::tools::McpTool;
-use crate::memo::{MemoStorage, MemoStore};
+use crate::memo::MemoStore;
+
+const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
+const CONTEXT_SEPARATOR: &str = "\n\n---\n\n";
 
 pub struct McpServer {
     pub name: String,
-    storage: MemoStorage,
     memo_store: MemoStore,
     tools: Vec<McpTool>,
 }
@@ -47,7 +50,6 @@ impl McpServer {
         let memo_store = MemoStore::from_git_root()?;
         Ok(Self {
             name,
-            storage: MemoStorage::new(),
             memo_store,
             tools,
         })
@@ -60,7 +62,7 @@ impl McpServer {
         let mut sigint = signal::unix::signal(signal::unix::SignalKind::interrupt())?;
         let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())?;
 
-        let stdin = std::io::stdin();
+        let stdin = tokio::io::stdin();
         let mut reader = BufReader::new(stdin);
         let mut stdout = std::io::stdout();
 
@@ -84,17 +86,16 @@ impl McpServer {
                 }
 
                 // Handle stdin messages
-                result = tokio::task::spawn_blocking(move || {
+                result = async {
                     let mut line = String::new();
-                    reader.read_line(&mut line).map(|n| (n, line, reader))
-                }) => {
+                    reader.read_line(&mut line).await.map(|n| (n, line))
+                } => {
                     match result {
-                        Ok(Ok((0, _, _))) => {
+                        Ok((0, _)) => {
                             // EOF
                             break;
                         }
-                        Ok(Ok((_, line, new_reader))) => {
-                            reader = new_reader;
+                        Ok((_, line)) => {
                             let line = line.trim();
 
                             if line.is_empty() {
@@ -138,12 +139,8 @@ impl McpServer {
                                 }
                             }
                         }
-                        Ok(Err(e)) => {
-                            error!("Error reading from stdin: {}", e);
-                            break;
-                        }
                         Err(e) => {
-                            error!("Task error: {}", e);
+                            error!("Error reading from stdin: {}", e);
                             break;
                         }
                     }
@@ -172,7 +169,7 @@ impl McpServer {
                     "jsonrpc": "2.0",
                     "id": id,
                     "result": {
-                        "protocolVersion": "2024-11-05",
+                        "protocolVersion": MCP_PROTOCOL_VERSION,
                         "serverInfo": {
                             "name": self.name,
                             "version": env!("CARGO_PKG_VERSION")
@@ -287,14 +284,6 @@ impl McpServer {
         &self.tools
     }
 
-    pub fn get_storage(&self) -> &MemoStorage {
-        &self.storage
-    }
-
-    pub fn get_storage_mut(&mut self) -> &mut MemoStorage {
-        &mut self.storage
-    }
-
     #[cfg(test)]
     pub fn new_with_memo_store(name: String, memo_store: MemoStore) -> Self {
         info!("Creating test MCP server: {}", name);
@@ -328,7 +317,6 @@ impl McpServer {
 
         Self {
             name,
-            storage: MemoStorage::new(),
             memo_store,
             tools,
         }
@@ -411,7 +399,7 @@ impl McpServer {
                 let memo_id = crate::memo::MemoId::from_ulid(memo_id);
 
                 self.memo_store.delete_memo(&memo_id)?;
-                Ok(format!("Memo {} deleted successfully", id_str))
+                Ok(format!("Memo {id_str} deleted successfully"))
             }
 
             "search_memos" => {
@@ -438,7 +426,7 @@ impl McpServer {
 
                 for memo in memos {
                     context.push_str(&format!("# {}\n\n{}", memo.title, memo.content));
-                    context.push_str("\n\n---\n\n");
+                    context.push_str(CONTEXT_SEPARATOR);
                 }
 
                 Ok(context)

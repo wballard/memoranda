@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use memoranda::cli::{DoctorCommand, HelpCommand};
 use memoranda::config::Settings;
 use memoranda::mcp::McpServer;
-use tracing::info;
+use tracing::{error, info};
 
 #[derive(Parser)]
 #[command(name = "memoranda")]
@@ -38,7 +38,7 @@ async fn main() {
             std::process::exit(0);
         }
         Err(e) => {
-            eprintln!("Error: {e}");
+            error!("Error: {e}");
 
             // Exit with appropriate code based on error type
             let exit_code = match e.downcast_ref::<std::io::Error>() {

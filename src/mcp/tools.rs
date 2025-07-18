@@ -1,6 +1,9 @@
-use anyhow::Result;
 use serde_json::Value;
 use tracing::info;
+
+const MEMO_TITLE_MAX_LENGTH: u32 = 255;
+const MEMO_CONTENT_MAX_LENGTH: u32 = 1048576;
+const SEARCH_QUERY_MAX_LENGTH: u32 = 1000;
 
 #[derive(Debug, Clone)]
 pub struct McpTool {
@@ -31,12 +34,12 @@ impl McpTool {
                             "type": "string",
                             "description": "The title of the memo",
                             "minLength": 1,
-                            "maxLength": 255
+                            "maxLength": MEMO_TITLE_MAX_LENGTH
                         },
                         "content": {
                             "type": "string",
                             "description": "The content of the memo",
-                            "maxLength": 1048576
+                            "maxLength": MEMO_CONTENT_MAX_LENGTH
                         }
                     },
                     "required": ["title", "content"]
@@ -54,7 +57,7 @@ impl McpTool {
                         "content": {
                             "type": "string",
                             "description": "The new content of the memo",
-                            "maxLength": 1048576
+                            "maxLength": MEMO_CONTENT_MAX_LENGTH
                         }
                     },
                     "required": ["id", "content"]
@@ -101,7 +104,7 @@ impl McpTool {
                             "type": "string",
                             "description": "The search query to match against memo titles and content",
                             "minLength": 1,
-                            "maxLength": 1000
+                            "maxLength": SEARCH_QUERY_MAX_LENGTH
                         }
                     },
                     "required": ["query"]
@@ -128,11 +131,5 @@ impl McpTool {
             description: Some(self.description.clone()),
             input_schema: schema,
         }
-    }
-
-    pub async fn execute(&self, _args: Value) -> Result<String> {
-        info!("Executing MCP tool: {}", self.name);
-        // Tool execution is now handled by the server's execute_tool method
-        Ok(format!("Tool {} executed successfully", self.name))
     }
 }
