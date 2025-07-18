@@ -16,7 +16,17 @@ Memoranda is a command-line tool and MCP (Model Context Protocol) server that pr
 ## Installation
 
 ```bash
-cargo install memoranda
+# Update from git repository
+cargo install --git https://github.com/wballard/memoranda.git memoranda --force
+
+```
+
+### Configure Claude Code
+
+Add to your Claude Code [MCP configuration](https://docs.anthropic.com/en/docs/claude-code/mcp)
+
+```bash
+claude mcp add --scope user memoranda memoranda serve
 ```
 
 ## Usage
