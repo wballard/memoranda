@@ -1,10 +1,10 @@
 use anyhow::Result;
 use std::io::{BufRead, BufReader, Write};
 use tokio::signal;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
-use crate::memo::MemoStorage;
 use super::tools::McpTool;
+use crate::memo::MemoStorage;
 
 pub struct McpServer {
     pub name: String,
@@ -28,12 +28,9 @@ impl McpServer {
                 "get_memo".to_string(),
                 "Get a specific memo by ID".to_string(),
             ),
-            McpTool::new(
-                "delete_memo".to_string(),
-                "Delete a memo by ID".to_string(),
-            ),
+            McpTool::new("delete_memo".to_string(), "Delete a memo by ID".to_string()),
         ];
-        
+
         Self {
             name,
             storage: MemoStorage::new(),
@@ -43,19 +40,19 @@ impl McpServer {
 
     pub async fn start(&self) -> Result<()> {
         info!("Starting MCP server: {}", self.name);
-        
+
         // Setup signal handling for graceful shutdown
         let mut sigint = signal::unix::signal(signal::unix::SignalKind::interrupt())?;
         let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())?;
-        
+
         let stdin = std::io::stdin();
         let mut reader = BufReader::new(stdin);
         let mut stdout = std::io::stdout();
-        
+
         info!("MCP server listening on stdio: {}", self.name);
-        
+
         let mut initialized = false;
-        
+
         // Process incoming messages with signal handling
         loop {
             tokio::select! {
@@ -64,13 +61,13 @@ impl McpServer {
                     info!("Received SIGINT, shutting down gracefully");
                     break;
                 }
-                
+
                 // Handle SIGTERM
                 _ = sigterm.recv() => {
                     info!("Received SIGTERM, shutting down gracefully");
                     break;
                 }
-                
+
                 // Handle stdin messages
                 result = tokio::task::spawn_blocking(move || {
                     let mut line = String::new();
@@ -84,19 +81,19 @@ impl McpServer {
                         Ok(Ok((_, line, new_reader))) => {
                             reader = new_reader;
                             let line = line.trim();
-                            
+
                             if line.is_empty() {
                                 continue;
                             }
-                            
+
                             info!("Received message: {}", line);
-                            
+
                             // Parse JSON-RPC message
                             match serde_json::from_str::<serde_json::Value>(line) {
                                 Ok(message) => {
                                     let response = self.handle_message(message, &mut initialized).await;
                                     if let Some(response) = response {
-                                        if let Err(e) = writeln!(stdout, "{}", response) {
+                                        if let Err(e) = writeln!(stdout, "{response}") {
                                             error!("Failed to write response: {}", e);
                                             break;
                                         }
@@ -115,7 +112,7 @@ impl McpServer {
                                             "message": "Parse error"
                                         }
                                     });
-                                    if let Err(e) = writeln!(stdout, "{}", error_response) {
+                                    if let Err(e) = writeln!(stdout, "{error_response}") {
                                         error!("Failed to write error response: {}", e);
                                         break;
                                     }
@@ -138,20 +135,24 @@ impl McpServer {
                 }
             }
         }
-        
+
         info!("MCP server shutting down");
         Ok(())
     }
 
-    async fn handle_message(&self, message: serde_json::Value, initialized: &mut bool) -> Option<serde_json::Value> {
+    async fn handle_message(
+        &self,
+        message: serde_json::Value,
+        initialized: &mut bool,
+    ) -> Option<serde_json::Value> {
         let method = message.get("method")?.as_str()?;
         let id = message.get("id");
-        
+
         match method {
             "initialize" => {
                 *initialized = true;
                 info!("Handling initialize request");
-                
+
                 let response = serde_json::json!({
                     "jsonrpc": "2.0",
                     "id": id,
@@ -168,10 +169,10 @@ impl McpServer {
                         }
                     }
                 });
-                
+
                 Some(response)
             }
-            
+
             "tools/list" => {
                 if !*initialized {
                     return Some(serde_json::json!({
@@ -183,21 +184,25 @@ impl McpServer {
                         }
                     }));
                 }
-                
+
                 info!("Handling tools/list request");
-                
-                let tools: Vec<serde_json::Value> = self.tools.iter().map(|tool| {
-                    serde_json::json!({
-                        "name": tool.name,
-                        "description": tool.description,
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {},
-                            "required": []
-                        }
+
+                let tools: Vec<serde_json::Value> = self
+                    .tools
+                    .iter()
+                    .map(|tool| {
+                        serde_json::json!({
+                            "name": tool.name,
+                            "description": tool.description,
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {},
+                                "required": []
+                            }
+                        })
                     })
-                }).collect();
-                
+                    .collect();
+
                 Some(serde_json::json!({
                     "jsonrpc": "2.0",
                     "id": id,
@@ -206,7 +211,7 @@ impl McpServer {
                     }
                 }))
             }
-            
+
             _ => {
                 info!("Unhandled method: {}", method);
                 Some(serde_json::json!({

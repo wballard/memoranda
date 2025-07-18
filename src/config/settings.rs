@@ -30,17 +30,18 @@ impl Settings {
 
     pub fn validate(&self) -> Result<()> {
         if self.mcp_server_port < 1024 {
-            return Err(MemorandaError::Validation(
-                format!("Invalid port number: {}. Port must be 1024 or higher", self.mcp_server_port)
-            ));
+            return Err(MemorandaError::Validation(format!(
+                "Invalid port number: {}. Port must be 1024 or higher",
+                self.mcp_server_port
+            )));
         }
-        
+
         if self.log_level.is_empty() {
             return Err(MemorandaError::Validation(
-                "Log level cannot be empty".to_string()
+                "Log level cannot be empty".to_string(),
             ));
         }
-        
+
         Ok(())
     }
 
@@ -115,17 +116,16 @@ mod tests {
     fn test_settings_save_and_load() {
         let temp_file = NamedTempFile::new().unwrap();
         let settings = Settings::new().unwrap();
-        
+
         // Save settings
         let path = temp_file.path().to_path_buf();
         settings.save_to_file(&path).unwrap();
-        
+
         // Load settings
         let loaded_settings = Settings::load_from_file(&path).unwrap();
-        
+
         assert_eq!(settings.data_dir, loaded_settings.data_dir);
         assert_eq!(settings.log_level, loaded_settings.log_level);
         assert_eq!(settings.mcp_server_port, loaded_settings.mcp_server_port);
     }
 }
-

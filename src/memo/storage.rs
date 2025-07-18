@@ -2,9 +2,9 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use thiserror::Error;
 use tracing::{info, warn};
 use walkdir::WalkDir;
-use thiserror::Error;
 
 use super::models::{Memo, MemoId};
 
@@ -12,28 +12,31 @@ use super::models::{Memo, MemoId};
 pub enum MemoStoreError {
     #[error("Memo not found: {id}")]
     MemoNotFound { id: String },
-    
+
     #[error("No .memoranda directories found")]
     NoMemorandaDirectories,
-    
+
     #[error("Invalid frontmatter in file {file}: {source}")]
-    InvalidFrontmatter { file: String, source: serde_json::Error },
-    
+    InvalidFrontmatter {
+        file: String,
+        source: serde_json::Error,
+    },
+
     #[error("Missing frontmatter section in file {file}")]
     MissingFrontmatter { file: String },
-    
+
     #[error("File operation failed: {source}")]
     FileOperation { source: std::io::Error },
-    
+
     #[error("Serialization error: {source}")]
     Serialization { source: serde_json::Error },
-    
+
     #[error("Validation error: {message}")]
     Validation { message: String },
-    
+
     #[error("Walkdir error: {source}")]
     WalkDir { source: walkdir::Error },
-    
+
     #[error("Git repository not found")]
     GitNotFound,
 }
@@ -60,7 +63,9 @@ impl From<walkdir::Error> for MemoStoreError {
 
 impl From<anyhow::Error> for MemoStoreError {
     fn from(err: anyhow::Error) -> Self {
-        MemoStoreError::Validation { message: err.to_string() }
+        MemoStoreError::Validation {
+            message: err.to_string(),
+        }
     }
 }
 
@@ -114,7 +119,7 @@ impl MemoStore {
 
     pub fn find_memoranda_dirs(&self) -> Result<Vec<PathBuf>> {
         let mut memoranda_dirs = Vec::new();
-        
+
         for entry in WalkDir::new(&self.root_path)
             .into_iter()
             .filter_map(|e| e.ok())
@@ -124,19 +129,19 @@ impl MemoStore {
                 memoranda_dirs.push(path.to_path_buf());
             }
         }
-        
+
         Ok(memoranda_dirs)
     }
 
     pub fn list_memos(&self) -> Result<Vec<Memo>> {
         let mut memos = Vec::new();
         let memoranda_dirs = self.find_memoranda_dirs()?;
-        
+
         for dir in memoranda_dirs {
             for entry in fs::read_dir(&dir)? {
                 let entry = entry?;
                 let path = entry.path();
-                
+
                 if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md") {
                     match self.load_memo_from_file(&path) {
                         Ok(memo) => memos.push(memo),
@@ -145,18 +150,18 @@ impl MemoStore {
                 }
             }
         }
-        
+
         Ok(memos)
     }
 
     pub fn get_memo(&self, id: &MemoId) -> Result<Option<Memo>> {
         let memoranda_dirs = self.find_memoranda_dirs()?;
-        
+
         for dir in memoranda_dirs {
             for entry in fs::read_dir(&dir)? {
                 let entry = entry?;
                 let path = entry.path();
-                
+
                 if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md") {
                     // Quick check: read just the frontmatter to check ID
                     if let Ok(Some(memo_id)) = self.extract_memo_id_from_file(&path) {
@@ -168,97 +173,103 @@ impl MemoStore {
                 }
             }
         }
-        
+
         Ok(None)
     }
 
     fn extract_memo_id_from_file(&self, file_path: &Path) -> Result<Option<MemoId>> {
         let content = fs::read_to_string(file_path)?;
-        
+
         if !content.starts_with("---\n") {
             return Ok(None);
         }
-        
+
         let mut parts = content.splitn(3, "---\n");
         parts.next(); // skip the first empty part
-        
-        let frontmatter = parts.next()
-            .ok_or(MemoStoreError::MissingFrontmatter { 
-                file: file_path.display().to_string() 
-            })?;
-        
+
+        let frontmatter = parts.next().ok_or(MemoStoreError::MissingFrontmatter {
+            file: file_path.display().to_string(),
+        })?;
+
         // Parse just the id field from the frontmatter
-        let value: serde_json::Value = serde_json::from_str(frontmatter)
-            .map_err(|e| MemoStoreError::InvalidFrontmatter { 
+        let value: serde_json::Value =
+            serde_json::from_str(frontmatter).map_err(|e| MemoStoreError::InvalidFrontmatter {
                 file: file_path.display().to_string(),
-                source: e 
+                source: e,
             })?;
-        
+
         if let Some(id_str) = value.get("id").and_then(|v| v.as_str()) {
             if let Ok(ulid) = id_str.parse::<ulid::Ulid>() {
                 return Ok(Some(MemoId::from_ulid(ulid)));
             }
         }
-        
+
         Ok(None)
     }
 
     pub fn create_memo(&self, title: String, content: String) -> Result<Memo> {
         let memoranda_dirs = self.find_memoranda_dirs()?;
-        let target_dir = memoranda_dirs.first()
+        let target_dir = memoranda_dirs
+            .first()
             .ok_or(MemoStoreError::NoMemorandaDirectories)?;
-        
+
         let filename = sanitize_filename(&title);
         let file_path = target_dir.join(format!("{filename}.md"));
-        
+
         let memo = Memo::with_file_path(title, content.clone(), Some(file_path.clone()))?;
-        
+
         self.save_memo_to_file(&memo, &file_path)?;
-        
+
         Ok(memo)
     }
 
     pub fn update_memo(&self, id: &MemoId, content: String) -> Result<Memo> {
-        let mut memo = self.get_memo(id)?
+        let mut memo = self
+            .get_memo(id)?
             .ok_or(MemoStoreError::MemoNotFound { id: id.to_string() })?;
-        
+
         memo.update_content(content)?;
-        
+
         if let Some(file_path) = &memo.file_path {
             self.save_memo_to_file(&memo, file_path)?;
         }
-        
+
         Ok(memo)
     }
 
     pub fn delete_memo(&self, id: &MemoId) -> Result<()> {
-        let memo = self.get_memo(id)?
+        let memo = self
+            .get_memo(id)?
             .ok_or(MemoStoreError::MemoNotFound { id: id.to_string() })?;
-        
+
         if let Some(file_path) = &memo.file_path {
             fs::remove_file(file_path)?;
         }
-        
+
         Ok(())
     }
 
     fn load_memo_from_file(&self, file_path: &Path) -> Result<Memo> {
         let content = fs::read_to_string(file_path)?;
-        
+
         // Try to parse frontmatter
         match self.parse_frontmatter(&content) {
             Ok(Some(mut memo)) => {
                 memo.file_path = Some(file_path.to_path_buf());
                 Ok(memo)
-            },
+            }
             Ok(None) => {
                 // No frontmatter found, create new memo from content
                 let title = extract_title_from_filename(file_path);
                 let memo = Memo::with_file_path(title, content, Some(file_path.to_path_buf()))?;
                 Ok(memo)
-            },
+            }
             Err(e) => {
-                warn!("Failed to parse frontmatter in {}: {}", file_path.display(), e);
+                warn!(
+                    "Failed to parse frontmatter in {}: {}",
+                    file_path.display(),
+                    e
+                );
                 // Fallback: create new memo from content
                 let title = extract_title_from_filename(file_path);
                 let memo = Memo::with_file_path(title, content, Some(file_path.to_path_buf()))?;
@@ -271,27 +282,26 @@ impl MemoStore {
         if !content.starts_with("---\n") {
             return Ok(None);
         }
-        
+
         let mut parts = content.splitn(3, "---\n");
         parts.next(); // skip the first empty part
-        
-        let frontmatter = parts.next()
-            .ok_or(MemoStoreError::MissingFrontmatter { 
-                file: "unknown".to_string() 
-            })?;
-        
-        let _body = parts.next()
-            .ok_or(MemoStoreError::MissingFrontmatter { 
-                file: "unknown".to_string() 
-            })?;
-        
+
+        let frontmatter = parts.next().ok_or(MemoStoreError::MissingFrontmatter {
+            file: "unknown".to_string(),
+        })?;
+
+        let _body = parts.next().ok_or(MemoStoreError::MissingFrontmatter {
+            file: "unknown".to_string(),
+        })?;
+
         // Parse frontmatter as JSON
-        let memo = serde_json::from_str::<Memo>(frontmatter)
-            .map_err(|e| MemoStoreError::InvalidFrontmatter { 
+        let memo = serde_json::from_str::<Memo>(frontmatter).map_err(|e| {
+            MemoStoreError::InvalidFrontmatter {
                 file: "unknown".to_string(),
-                source: e 
-            })?;
-        
+                source: e,
+            }
+        })?;
+
         Ok(Some(memo))
     }
 
@@ -299,27 +309,26 @@ impl MemoStore {
         if let Some(parent) = file_path.parent() {
             fs::create_dir_all(parent)?;
         }
-        
+
         // Create memo without file_path for serialization
         let mut memo_for_serialization = memo.clone();
         memo_for_serialization.file_path = None;
-        
+
         let frontmatter = serde_json::to_string_pretty(&memo_for_serialization)?;
         let file_content = format!("---\n{}\n---\n{}", frontmatter, memo.content);
-        
+
         // Atomic write: write to temporary file first, then rename
         let temp_file_path = file_path.with_extension("md.tmp");
-        
+
         // Write to temporary file
         fs::write(&temp_file_path, &file_content)?;
-        
+
         // Atomically rename temporary file to final destination
-        fs::rename(&temp_file_path, file_path)
-            .inspect_err(|_| {
-                // Clean up temporary file on failure
-                let _ = fs::remove_file(&temp_file_path);
-            })?;
-        
+        fs::rename(&temp_file_path, file_path).inspect_err(|_| {
+            // Clean up temporary file on failure
+            let _ = fs::remove_file(&temp_file_path);
+        })?;
+
         Ok(())
     }
 }
@@ -348,12 +357,12 @@ pub fn extract_title_from_filename(file_path: &Path) -> String {
 pub fn find_git_root() -> Result<PathBuf> {
     let current_dir = std::env::current_dir()?;
     let mut dir = current_dir.as_path();
-    
+
     loop {
         if dir.join(".git").exists() {
             return Ok(dir.to_path_buf());
         }
-        
+
         match dir.parent() {
             Some(parent) => dir = parent,
             None => return Err(MemoStoreError::GitNotFound),
@@ -376,9 +385,9 @@ mod tests {
         let mut storage = MemoStorage::new();
         let memo = Memo::new("Test".to_string(), "Content".to_string()).unwrap();
         let memo_id = memo.id;
-        
+
         storage.store_memo(memo).unwrap();
-        
+
         let retrieved = storage.get_memo(&memo_id);
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().title, "Test");
@@ -389,10 +398,10 @@ mod tests {
         let mut storage = MemoStorage::new();
         let memo1 = Memo::new("Test1".to_string(), "Content1".to_string()).unwrap();
         let memo2 = Memo::new("Test2".to_string(), "Content2".to_string()).unwrap();
-        
+
         storage.store_memo(memo1).unwrap();
         storage.store_memo(memo2).unwrap();
-        
+
         let memos = storage.list_memos();
         assert_eq!(memos.len(), 2);
     }
@@ -402,10 +411,10 @@ mod tests {
         let mut storage = MemoStorage::new();
         let memo = Memo::new("Test".to_string(), "Content".to_string()).unwrap();
         let memo_id = memo.id;
-        
+
         storage.store_memo(memo).unwrap();
         assert!(storage.get_memo(&memo_id).is_some());
-        
+
         let removed = storage.remove_memo(&memo_id);
         assert!(removed.is_some());
         assert_eq!(removed.unwrap().title, "Test");
@@ -431,16 +440,16 @@ mod tests {
     #[test]
     fn test_extract_title_from_filename() {
         use std::path::Path;
-        
+
         let path = Path::new("test_file.md");
         assert_eq!(extract_title_from_filename(path), "test file");
-        
+
         let path = Path::new("hello_world.md");
         assert_eq!(extract_title_from_filename(path), "hello world");
-        
+
         let path = Path::new("single.md");
         assert_eq!(extract_title_from_filename(path), "single");
-        
+
         let path = Path::new("no_extension");
         assert_eq!(extract_title_from_filename(path), "no extension");
     }
@@ -463,25 +472,25 @@ mod tests {
 
     #[test]
     fn test_memo_store_find_memoranda_dirs() {
-        use tempfile::TempDir;
         use std::fs;
-        
+        use tempfile::TempDir;
+
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
-        
+
         // Create a .memoranda directory
         let memoranda_dir = temp_path.join(".memoranda");
         fs::create_dir(&memoranda_dir).unwrap();
-        
+
         // Create a nested .memoranda directory
         let nested_dir = temp_path.join("nested");
         fs::create_dir(&nested_dir).unwrap();
         let nested_memoranda = nested_dir.join(".memoranda");
         fs::create_dir(&nested_memoranda).unwrap();
-        
+
         let store = MemoStore::new(temp_path.to_path_buf());
         let dirs = store.find_memoranda_dirs().unwrap();
-        
+
         assert_eq!(dirs.len(), 2);
         assert!(dirs.contains(&memoranda_dir));
         assert!(dirs.contains(&nested_memoranda));
@@ -489,27 +498,32 @@ mod tests {
 
     #[test]
     fn test_memo_store_with_file_operations() {
-        use tempfile::TempDir;
         use std::fs;
-        
+        use tempfile::TempDir;
+
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
-        
+
         // Create a .memoranda directory
         let memoranda_dir = temp_path.join(".memoranda");
         fs::create_dir(&memoranda_dir).unwrap();
-        
+
         let store = MemoStore::new(temp_path.to_path_buf());
-        
+
         // Create a memo using the store (which will use proper format)
-        let _memo = store.create_memo("Test Memo".to_string(), "This is a test memo content.".to_string()).unwrap();
-        
+        let _memo = store
+            .create_memo(
+                "Test Memo".to_string(),
+                "This is a test memo content.".to_string(),
+            )
+            .unwrap();
+
         // Test listing memos
         let memos = store.list_memos().unwrap();
         assert_eq!(memos.len(), 1);
         assert_eq!(memos[0].title, "Test Memo");
         assert_eq!(memos[0].content, "This is a test memo content.");
-        
+
         // Test getting a specific memo
         let memo_id = memos[0].id;
         let retrieved_memo = store.get_memo(&memo_id).unwrap();
@@ -521,24 +535,26 @@ mod tests {
 
     #[test]
     fn test_memo_store_create_memo() {
-        use tempfile::TempDir;
         use std::fs;
-        
+        use tempfile::TempDir;
+
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
-        
+
         // Create a .memoranda directory
         let memoranda_dir = temp_path.join(".memoranda");
         fs::create_dir(&memoranda_dir).unwrap();
-        
+
         let store = MemoStore::new(temp_path.to_path_buf());
-        
+
         // Test creating a new memo
-        let memo = store.create_memo("New Memo".to_string(), "This is new content".to_string()).unwrap();
+        let memo = store
+            .create_memo("New Memo".to_string(), "This is new content".to_string())
+            .unwrap();
         assert_eq!(memo.title, "New Memo");
         assert_eq!(memo.content, "This is new content");
         assert!(memo.file_path.is_some());
-        
+
         // Verify the file was created
         let file_path = memo.file_path.unwrap();
         assert!(file_path.exists());
@@ -549,27 +565,31 @@ mod tests {
 
     #[test]
     fn test_memo_store_update_memo() {
-        use tempfile::TempDir;
         use std::fs;
-        
+        use tempfile::TempDir;
+
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
-        
+
         // Create a .memoranda directory
         let memoranda_dir = temp_path.join(".memoranda");
         fs::create_dir(&memoranda_dir).unwrap();
-        
+
         let store = MemoStore::new(temp_path.to_path_buf());
-        
+
         // Create a memo
-        let memo = store.create_memo("Update Test".to_string(), "Original content".to_string()).unwrap();
+        let memo = store
+            .create_memo("Update Test".to_string(), "Original content".to_string())
+            .unwrap();
         let memo_id = memo.id;
-        
+
         // Update the memo
-        let updated_memo = store.update_memo(&memo_id, "Updated content".to_string()).unwrap();
+        let updated_memo = store
+            .update_memo(&memo_id, "Updated content".to_string())
+            .unwrap();
         assert_eq!(updated_memo.content, "Updated content");
         assert!(updated_memo.updated_at > updated_memo.created_at);
-        
+
         // Verify the file was updated
         let file_path = updated_memo.file_path.unwrap();
         let file_content = fs::read_to_string(&file_path).unwrap();
@@ -579,35 +599,36 @@ mod tests {
 
     #[test]
     fn test_memo_store_delete_memo() {
-        use tempfile::TempDir;
         use std::fs;
-        
+        use tempfile::TempDir;
+
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
-        
+
         // Create a .memoranda directory
         let memoranda_dir = temp_path.join(".memoranda");
         fs::create_dir(&memoranda_dir).unwrap();
-        
+
         let store = MemoStore::new(temp_path.to_path_buf());
-        
+
         // Create a memo
-        let memo = store.create_memo("Delete Test".to_string(), "To be deleted".to_string()).unwrap();
+        let memo = store
+            .create_memo("Delete Test".to_string(), "To be deleted".to_string())
+            .unwrap();
         let memo_id = memo.id;
         let file_path = memo.file_path.clone().unwrap();
-        
+
         // Verify the file exists
         assert!(file_path.exists());
-        
+
         // Delete the memo
         store.delete_memo(&memo_id).unwrap();
-        
+
         // Verify the file was deleted
         assert!(!file_path.exists());
-        
+
         // Verify the memo is no longer retrievable
         let retrieved = store.get_memo(&memo_id).unwrap();
         assert!(retrieved.is_none());
     }
 }
-

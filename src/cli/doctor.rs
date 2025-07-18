@@ -35,7 +35,7 @@ impl DoctorCommand {
         if issues_found == 0 {
             println!("✅ All systems operational! No issues found.");
         } else {
-            println!("❌ Found {} issue(s) that need attention.", issues_found);
+            println!("❌ Found {issues_found} issue(s) that need attention.");
             println!();
             println!("RECOMMENDATIONS:");
             println!("- Run 'memoranda doctor' again after fixing issues");
@@ -47,7 +47,7 @@ impl DoctorCommand {
 
     fn check_memoranda_directory(&self) -> i32 {
         let memoranda_path = Path::new(".memoranda");
-        
+
         if memoranda_path.exists() {
             if memoranda_path.is_dir() {
                 println!("✅ .memoranda directory exists");
@@ -76,45 +76,35 @@ impl DoctorCommand {
         }
     }
 
-    fn check_file_permissions(&self) -> i32 {
-        let mut issues = 0;
-        
-        // Check current directory write permissions
-        match fs::metadata(".") {
+    fn check_directory_permissions(&self, path: &str, display_name: &str) -> i32 {
+        match fs::metadata(path) {
             Ok(metadata) => {
                 if metadata.permissions().readonly() {
-                    println!("❌ Current directory is read-only");
-                    println!("   Fix: Change directory permissions to allow writing");
-                    issues += 1;
+                    println!("❌ {display_name} is read-only");
+                    println!("   Fix: Change {display_name} permissions to allow writing");
+                    1
                 } else {
-                    println!("✅ Directory permissions are correct");
+                    println!("✅ {display_name} permissions are correct");
+                    0
                 }
             }
             Err(e) => {
-                warn!("Could not check directory permissions: {}", e);
-                println!("❌ Could not check directory permissions");
-                issues += 1;
+                warn!("Could not check {display_name} permissions: {e}");
+                println!("❌ Could not check {display_name} permissions");
+                1
             }
         }
+    }
+
+    fn check_file_permissions(&self) -> i32 {
+        let mut issues = 0;
+
+        // Check current directory write permissions
+        issues += self.check_directory_permissions(".", "Current directory");
 
         // Check .memoranda directory permissions if it exists
         if Path::new(".memoranda").exists() {
-            match fs::metadata(".memoranda") {
-                Ok(metadata) => {
-                    if metadata.permissions().readonly() {
-                        println!("❌ .memoranda directory is read-only");
-                        println!("   Fix: Change .memoranda directory permissions");
-                        issues += 1;
-                    } else {
-                        println!("✅ .memoranda directory permissions are correct");
-                    }
-                }
-                Err(e) => {
-                    warn!("Could not check .memoranda permissions: {}", e);
-                    println!("❌ Could not check .memoranda permissions");
-                    issues += 1;
-                }
-            }
+            issues += self.check_directory_permissions(".memoranda", ".memoranda directory");
         }
 
         issues
@@ -122,7 +112,7 @@ impl DoctorCommand {
 
     fn check_memo_formats(&self) -> i32 {
         let memoranda_path = Path::new(".memoranda");
-        
+
         if !memoranda_path.exists() {
             println!("⚠️  No memo files to validate (no .memoranda directory)");
             return 0;
@@ -133,16 +123,14 @@ impl DoctorCommand {
                 let mut memo_count = 0;
                 let mut issues = 0;
 
-                for entry in entries {
-                    if let Ok(entry) = entry {
-                        let path = entry.path();
-                        if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                            memo_count += 1;
-                            if let Err(e) = self.validate_memo_file(&path) {
-                                println!("❌ Invalid memo file: {}", path.display());
-                                println!("   Error: {}", e);
-                                issues += 1;
-                            }
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                        memo_count += 1;
+                        if let Err(e) = self.validate_memo_file(&path) {
+                            println!("❌ Invalid memo file: {}", path.display());
+                            println!("   Error: {e}");
+                            issues += 1;
                         }
                     }
                 }
@@ -151,7 +139,7 @@ impl DoctorCommand {
                     println!("⚠️  No memo files found");
                     println!("   Info: Memo files will be created when you start using the system");
                 } else if issues == 0 {
-                    println!("✅ All {} memo files are valid", memo_count);
+                    println!("✅ All {memo_count} memo files are valid");
                 }
 
                 issues
@@ -159,7 +147,7 @@ impl DoctorCommand {
             Err(e) => {
                 warn!("Could not read .memoranda directory: {}", e);
                 println!("❌ Could not read .memoranda directory");
-                println!("   Error: {}", e);
+                println!("   Error: {e}");
                 1
             }
         }
@@ -190,4 +178,3 @@ mod tests {
         let _ = doctor;
     }
 }
-
