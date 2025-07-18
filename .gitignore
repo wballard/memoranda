@@ -28,3 +28,9 @@ test_output.log
 # Scratch files
 CODE_REVIEW.md
 TEST_FAILURES.md
+
+# Added by cargo
+#
+# already existing elements were commented out
+
+#/target
