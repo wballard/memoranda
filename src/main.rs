@@ -4,7 +4,6 @@ use memoranda::cli::{DoctorCommand, HelpCommand};
 use memoranda::config::Settings;
 use memoranda::mcp::McpServer;
 use tracing::info;
-use tracing_subscriber;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -28,19 +27,19 @@ enum Commands {
 async fn main() -> Result<()> {
     // Initialize tracing
     tracing_subscriber::fmt::init();
-    
+
     info!("Starting memoranda");
-    
+
     let cli = Cli::parse();
-    let _settings = Settings::new();
-    
+    let _settings = Settings::new()?;
+
     match &cli.command {
         Some(Commands::Doctor) => {
             let doctor = DoctorCommand::new();
             doctor.run().await?;
         }
         Some(Commands::Server { port }) => {
-            let server = McpServer::new(format!("memoranda-server:{}", port));
+            let server = McpServer::new(format!("memoranda-server:{port}"));
             server.start().await?;
         }
         None => {
@@ -48,6 +47,7 @@ async fn main() -> Result<()> {
             help.run()?;
         }
     }
-    
+
     Ok(())
 }
+

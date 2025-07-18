@@ -1,6 +1,7 @@
 use anyhow::Result;
 use tracing::info;
 
+#[derive(Default)]
 pub struct HelpCommand;
 
 impl HelpCommand {
@@ -21,3 +22,23 @@ impl HelpCommand {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_help_command_execution() {
+        let help = HelpCommand::new();
+        let result = help.run();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_help_command_creation() {
+        let help = HelpCommand::new();
+        // Just verify it can be created without panic
+        let _ = help;
+    }
+}
+
