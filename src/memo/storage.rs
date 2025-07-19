@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
-use tokio::fs as async_fs;
 use thiserror::Error;
+use tokio::fs as async_fs;
 use tracing::{info, warn};
 use walkdir::WalkDir;
 
@@ -116,6 +116,56 @@ pub struct MemoStore {
 }
 
 impl MemoStore {
+    // Helper function to check if a file is a markdown file
+    fn is_markdown_file(path: &Path) -> bool {
+        path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md")
+    }
+    
+    // Helper function to create and cache memo metadata
+    async fn create_and_cache_metadata(&self, memo: &Memo, file_path: &Path) -> Result<()> {
+        if let Ok(file_metadata) = async_fs::metadata(file_path).await {
+            if let Ok(last_modified) = file_metadata.modified() {
+                let metadata = MemoMetadata {
+                    id: memo.id,
+                    title: memo.title.clone(),
+                    file_path: file_path.to_path_buf(),
+                    last_modified,
+                    file_size: file_metadata.len(),
+                };
+                self.cache.put_metadata(file_path.to_path_buf(), metadata).await;
+            }
+        }
+        Ok(())
+    }
+    
+    // Helper function to parse frontmatter and extract memo ID from content
+    fn extract_memo_id_from_content(content: &str, file_path: &Path) -> Result<Option<MemoId>> {
+        if !content.starts_with("---\n") {
+            return Ok(None);
+        }
+
+        let mut parts = content.splitn(3, "---\n");
+        parts.next(); // skip the first empty part
+
+        let frontmatter = parts.next().ok_or(MemoStoreError::MissingFrontmatter {
+            file: file_path.display().to_string(),
+        })?;
+
+        // Parse just the id field from the frontmatter
+        let value: serde_json::Value =
+            serde_json::from_str(frontmatter).map_err(|e| MemoStoreError::InvalidFrontmatter {
+                file: file_path.display().to_string(),
+                source: e,
+            })?;
+
+        if let Some(id_str) = value.get("id").and_then(|v| v.as_str()) {
+            if let Ok(ulid) = id_str.parse::<ulid::Ulid>() {
+                return Ok(Some(MemoId::from_ulid(ulid)));
+            }
+        }
+
+        Ok(None)
+    }
     pub fn new(root_path: PathBuf) -> Self {
         Self {
             root_path,
@@ -164,7 +214,7 @@ impl MemoStore {
             while let Some(entry) = entries.next_entry().await? {
                 let path = entry.path();
                 let metadata = entry.metadata().await?;
-                
+
                 if metadata.is_dir() {
                     if path.file_name().and_then(|s| s.to_str()) == Some(".memoranda") {
                         memoranda_dirs.push(path);
@@ -188,7 +238,7 @@ impl MemoStore {
                 let entry = entry?;
                 let path = entry.path();
 
-                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md") {
+                if Self::is_markdown_file(&path) {
                     match self.load_memo_from_file(&path) {
                         Ok(memo) => memos.push(memo),
                         Err(e) => warn!("Failed to load memo from {}: {}", path.display(), e),
@@ -209,7 +259,7 @@ impl MemoStore {
             while let Some(entry) = dir_entries.next_entry().await? {
                 let path = entry.path();
 
-                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md") {
+                if Self::is_markdown_file(&path) {
                     match self.load_memo_from_file_async(&path).await {
                         Ok(memo) => memos.push(memo),
                         Err(e) => warn!("Failed to load memo from {}: {}", path.display(), e),
@@ -229,7 +279,7 @@ impl MemoStore {
                 let entry = entry?;
                 let path = entry.path();
 
-                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md") {
+                if Self::is_markdown_file(&path) {
                     // Quick check: read just the frontmatter to check ID
                     if let Ok(Some(memo_id)) = self.extract_memo_id_from_file(&path) {
                         if memo_id == *id {
@@ -249,7 +299,12 @@ impl MemoStore {
         if let Some(cached_memo) = self.cache.get_memo(id).await {
             // Verify cache validity if we have the file path
             if let Some(file_path) = &cached_memo.file_path {
-                if self.cache.is_memo_valid(id, file_path).await.unwrap_or(false) {
+                if self
+                    .cache
+                    .is_memo_valid(id, file_path)
+                    .await
+                    .unwrap_or(false)
+                {
                     return Ok(Some((*cached_memo).clone()));
                 }
             } else {
@@ -265,32 +320,21 @@ impl MemoStore {
             while let Some(entry) = dir_entries.next_entry().await? {
                 let path = entry.path();
 
-                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md") {
+                if Self::is_markdown_file(&path) {
                     // Quick check: read just the frontmatter to check ID
                     if let Ok(Some(memo_id)) = self.extract_memo_id_from_file_async(&path).await {
                         if memo_id == *id {
                             // Found the memo, load it fully and cache it
                             let memo = self.load_memo_from_file_async(&path).await?;
-                            
+
                             // Cache the memo
                             self.cache.put_memo(memo.clone()).await;
-                            
-                            // Also cache metadata for validation
-                            if let Ok(file_metadata) = async_fs::metadata(&path).await {
-                                if let Ok(last_modified) = file_metadata.modified() {
-                                    let metadata = MemoMetadata {
-                                        id: memo.id,
-                                        title: memo.title.clone(),
-                                        file_path: path,
-                                        last_modified,
-                                        file_size: file_metadata.len(),
-                                    };
-                                    if let Some(file_path) = &memo.file_path {
-                                        self.cache.put_metadata(file_path.clone(), metadata).await;
-                                    }
-                                }
+
+                            // Cache metadata for validation
+                            if let Some(file_path) = &memo.file_path {
+                                let _ = self.create_and_cache_metadata(&memo, file_path).await;
                             }
-                            
+
                             return Ok(Some(memo));
                         }
                     }
@@ -311,61 +355,12 @@ impl MemoStore {
             "read_memo_file",
         )?;
 
-        if !content.starts_with("---\n") {
-            return Ok(None);
-        }
-
-        let mut parts = content.splitn(3, "---\n");
-        parts.next(); // skip the first empty part
-
-        let frontmatter = parts.next().ok_or(MemoStoreError::MissingFrontmatter {
-            file: file_path.display().to_string(),
-        })?;
-
-        // Parse just the id field from the frontmatter
-        let value: serde_json::Value =
-            serde_json::from_str(frontmatter).map_err(|e| MemoStoreError::InvalidFrontmatter {
-                file: file_path.display().to_string(),
-                source: e,
-            })?;
-
-        if let Some(id_str) = value.get("id").and_then(|v| v.as_str()) {
-            if let Ok(ulid) = id_str.parse::<ulid::Ulid>() {
-                return Ok(Some(MemoId::from_ulid(ulid)));
-            }
-        }
-
-        Ok(None)
+        Self::extract_memo_id_from_content(&content, file_path)
     }
 
     async fn extract_memo_id_from_file_async(&self, file_path: &Path) -> Result<Option<MemoId>> {
         let content = async_fs::read_to_string(file_path).await?;
-
-        if !content.starts_with("---\n") {
-            return Ok(None);
-        }
-
-        let mut parts = content.splitn(3, "---\n");
-        parts.next(); // skip the first empty part
-
-        let frontmatter = parts.next().ok_or(MemoStoreError::MissingFrontmatter {
-            file: file_path.display().to_string(),
-        })?;
-
-        // Parse just the id field from the frontmatter
-        let value: serde_json::Value =
-            serde_json::from_str(frontmatter).map_err(|e| MemoStoreError::InvalidFrontmatter {
-                file: file_path.display().to_string(),
-                source: e,
-            })?;
-
-        if let Some(id_str) = value.get("id").and_then(|v| v.as_str()) {
-            if let Ok(ulid) = id_str.parse::<ulid::Ulid>() {
-                return Ok(Some(MemoId::from_ulid(ulid)));
-            }
-        }
-
-        Ok(None)
+        Self::extract_memo_id_from_content(&content, file_path)
     }
 
     pub fn create_memo(&self, title: String, content: String) -> Result<Memo> {
@@ -397,24 +392,13 @@ impl MemoStore {
         let memo = Memo::with_file_path(title, content.clone(), Some(file_path.clone()))?;
 
         self.save_memo_to_file_async(&memo, &file_path).await?;
-        
+
         // Cache the newly created memo
         self.cache.put_memo(memo.clone()).await;
-        
+
         // Cache metadata
-        if let Ok(file_metadata) = async_fs::metadata(&file_path).await {
-            if let Ok(last_modified) = file_metadata.modified() {
-                let metadata = MemoMetadata {
-                    id: memo.id,
-                    title: memo.title.clone(),
-                    file_path: file_path.clone(),
-                    last_modified,
-                    file_size: file_metadata.len(),
-                };
-                self.cache.put_metadata(file_path, metadata).await;
-            }
-        }
-        
+        let _ = self.create_and_cache_metadata(&memo, &file_path).await;
+
         self.mark_index_dirty();
 
         Ok(memo)
@@ -437,30 +421,20 @@ impl MemoStore {
 
     pub async fn update_memo_async(&self, id: &MemoId, content: String) -> Result<Memo> {
         let mut memo = self
-            .get_memo_async(id).await?
+            .get_memo_async(id)
+            .await?
             .ok_or(MemoStoreError::MemoNotFound { id: id.to_string() })?;
 
         memo.update_content(content)?;
 
         if let Some(file_path) = &memo.file_path {
             self.save_memo_to_file_async(&memo, file_path).await?;
-            
+
             // Update cache with new memo version
             self.cache.put_memo(memo.clone()).await;
-            
+
             // Update metadata cache
-            if let Ok(file_metadata) = async_fs::metadata(file_path).await {
-                if let Ok(last_modified) = file_metadata.modified() {
-                    let metadata = MemoMetadata {
-                        id: memo.id,
-                        title: memo.title.clone(),
-                        file_path: file_path.clone(),
-                        last_modified,
-                        file_size: file_metadata.len(),
-                    };
-                    self.cache.put_metadata(file_path.clone(), metadata).await;
-                }
-            }
+            let _ = self.create_and_cache_metadata(&memo, file_path).await;
         }
         self.mark_index_dirty();
 
@@ -487,12 +461,13 @@ impl MemoStore {
 
     pub async fn delete_memo_async(&self, id: &MemoId) -> Result<()> {
         let memo = self
-            .get_memo_async(id).await?
+            .get_memo_async(id)
+            .await?
             .ok_or(MemoStoreError::MemoNotFound { id: id.to_string() })?;
 
         if let Some(file_path) = &memo.file_path {
             async_fs::remove_file(file_path).await?;
-            
+
             // Remove from cache
             self.cache.remove_memo(id).await;
             self.cache.remove_metadata(file_path).await;
@@ -726,11 +701,11 @@ impl MemoStore {
     pub async fn warm_cache(&self) -> Result<usize> {
         let memos = self.list_memos_async().await?;
         let count = memos.len();
-        
+
         for memo in memos {
             self.cache.put_memo(memo).await;
         }
-        
+
         info!("Warmed cache with {} memos", count);
         Ok(count)
     }
@@ -1172,7 +1147,10 @@ mod tests {
 
         // Test async memo creation
         let memo = store
-            .create_memo_async("Async Test Memo".to_string(), "This is async content".to_string())
+            .create_memo_async(
+                "Async Test Memo".to_string(),
+                "This is async content".to_string(),
+            )
             .await
             .unwrap();
         assert_eq!(memo.title, "Async Test Memo");
@@ -1238,8 +1216,8 @@ mod tests {
     #[tokio::test]
     async fn test_async_file_operations_performance() {
         use std::fs;
-        use tempfile::TempDir;
         use std::time::Instant;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
@@ -1257,21 +1235,18 @@ mod tests {
             let store_clone = &store;
             let task = async move {
                 store_clone
-                    .create_memo_async(
-                        format!("Async Memo {i}"),
-                        format!("Async content {i}")
-                    )
+                    .create_memo_async(format!("Async Memo {i}"), format!("Async content {i}"))
                     .await
             };
             async_tasks.push(task);
         }
-        
+
         // Execute all async operations concurrently
         let async_results: Vec<_> = futures::future::try_join_all(async_tasks).await.unwrap();
         let async_duration = start_async.elapsed();
 
         assert_eq!(async_results.len(), 10);
-        
+
         // Clean up async-created memos
         for memo in async_results {
             store.delete_memo_async(&memo.id).await.unwrap();
@@ -1288,8 +1263,11 @@ mod tests {
 
         // For small operations, async might not be significantly faster,
         // but it should at least work correctly
-        println!("Async duration: {:?}, Sync duration: {:?}", async_duration, sync_duration);
-        
+        println!(
+            "Async duration: {:?}, Sync duration: {:?}",
+            async_duration, sync_duration
+        );
+
         // Verify both approaches created the same number of memos
         let memos = store.list_memos_async().await.unwrap();
         assert_eq!(memos.len(), 10);
@@ -1320,8 +1298,12 @@ mod tests {
 
         // Check cache stats after creation
         let stats_after_create = store.get_cache_stats().await;
-        println!("Stats after create: hits={}, misses={}, cache_size={}", 
-                 stats_after_create.memo_hits, stats_after_create.memo_misses, stats_after_create.memo_cache_size);
+        println!(
+            "Stats after create: hits={}, misses={}, cache_size={}",
+            stats_after_create.memo_hits,
+            stats_after_create.memo_misses,
+            stats_after_create.memo_cache_size
+        );
 
         // First retrieval should cache the memo
         let retrieved1 = store.get_memo_async(&memo_id).await.unwrap();
@@ -1330,8 +1312,12 @@ mod tests {
 
         // Check cache stats after first retrieval
         let stats_after_first = store.get_cache_stats().await;
-        println!("Stats after first retrieval: hits={}, misses={}, cache_size={}", 
-                 stats_after_first.memo_hits, stats_after_first.memo_misses, stats_after_first.memo_cache_size);
+        println!(
+            "Stats after first retrieval: hits={}, misses={}, cache_size={}",
+            stats_after_first.memo_hits,
+            stats_after_first.memo_misses,
+            stats_after_first.memo_cache_size
+        );
 
         // Second retrieval should come from cache (faster)
         let retrieved2 = store.get_memo_async(&memo_id).await.unwrap();
@@ -1341,11 +1327,18 @@ mod tests {
 
         // Check cache stats - the important thing is that we get cache hits
         let stats = store.get_cache_stats().await;
-        println!("Final cache stats: hits={}, misses={}, cache_size={}", stats.memo_hits, stats.memo_misses, stats.memo_cache_size);
-        
+        println!(
+            "Final cache stats: hits={}, misses={}, cache_size={}",
+            stats.memo_hits, stats.memo_misses, stats.memo_cache_size
+        );
+
         // The key indicator of successful caching is cache hits
-        assert!(stats.memo_hits > 0, "Expected memo cache hits but got {}", stats.memo_hits);
-        
+        assert!(
+            stats.memo_hits > 0,
+            "Expected memo cache hits but got {}",
+            stats.memo_hits
+        );
+
         // Note: cache_size might be 0 due to moka's internal cache management,
         // but the hits prove that caching is working correctly
     }
@@ -1446,11 +1439,11 @@ mod tests {
 
         // Clear cache
         store.clear_cache().await;
-        
+
         // Warm cache
         let warmed_count = store.warm_cache().await.unwrap();
         assert_eq!(warmed_count, 5);
-        
+
         // Verify warming worked by checking that we can retrieve memos efficiently
         // (They should come from cache, not requiring file reads)
         let memos = store.list_memos_async().await.unwrap();
@@ -1463,8 +1456,8 @@ mod tests {
     #[tokio::test]
     async fn test_cache_performance_improvement() {
         use std::fs;
-        use tempfile::TempDir;
         use std::time::Instant;
+        use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
@@ -1477,7 +1470,10 @@ mod tests {
 
         // Create a memo
         let memo = store
-            .create_memo_async("Performance Test".to_string(), "Performance content".to_string())
+            .create_memo_async(
+                "Performance Test".to_string(),
+                "Performance content".to_string(),
+            )
             .await
             .unwrap();
 
@@ -1494,8 +1490,11 @@ mod tests {
         let second_duration = start_second.elapsed();
 
         // Cache access should be faster (though with small files, difference might be minimal)
-        println!("First access: {:?}, Second access (cached): {:?}", first_duration, second_duration);
-        
+        println!(
+            "First access: {:?}, Second access (cached): {:?}",
+            first_duration, second_duration
+        );
+
         // At minimum, both should work correctly
         assert!(_first_access.is_some());
         assert!(_second_access.is_some());

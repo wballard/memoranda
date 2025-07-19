@@ -207,7 +207,7 @@ async fn run_cli() -> Result<()> {
 
     // Check for special cases before parsing
     let args: Vec<String> = std::env::args().collect();
-    
+
     // Handle global flags and help command
     if args.len() == 2 {
         match args[1].as_str() {
@@ -234,7 +234,7 @@ async fn run_cli() -> Result<()> {
             _ => {}
         }
     }
-    
+
     // Handle subcommand help flags
     if args.len() == 3 && (args[2] == "--help" || args[2] == "-h") {
         match args[1].as_str() {
@@ -255,16 +255,15 @@ async fn run_cli() -> Result<()> {
     }
 
     // Parse CLI arguments with better error context
-    let cli = Cli::try_parse()
-        .map_err(|e| {
-            // For invalid subcommands, preserve Clap's original error message
-            let error_msg = e.to_string();
-            if error_msg.contains("unrecognized subcommand") {
-                anyhow::anyhow!("{}", error_msg)
-            } else {
-                CliError::invalid_argument("command line", error_msg).into()
-            }
-        })?;
+    let cli = Cli::try_parse().map_err(|e| {
+        // For invalid subcommands, preserve Clap's original error message
+        let error_msg = e.to_string();
+        if error_msg.contains("unrecognized subcommand") {
+            anyhow::anyhow!("{}", error_msg)
+        } else {
+            CliError::invalid_argument("command line", error_msg).into()
+        }
+    })?;
 
     // Initialize settings with better error handling and context
     let _settings = Settings::new()

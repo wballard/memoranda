@@ -206,24 +206,18 @@ impl From<crate::memo::storage::MemoStoreError> for StorageError {
 impl From<crate::memo::storage::MemoStoreError> for MemorandaError {
     fn from(err: crate::memo::storage::MemoStoreError) -> Self {
         match &err {
-            crate::memo::storage::MemoStoreError::MemoNotFound { id } => {
-                MemorandaError::Storage {
-                    message: format!("Memo not found: {id}"),
-                    source: Some(Box::new(err)),
-                }
-            }
-            crate::memo::storage::MemoStoreError::FileOperation { .. } => {
-                MemorandaError::Storage {
-                    message: "File operation failed".to_string(),
-                    source: Some(Box::new(err)),
-                }
-            }
-            crate::memo::storage::MemoStoreError::Serialization { .. } => {
-                MemorandaError::Storage {
-                    message: "Serialization failed".to_string(),
-                    source: Some(Box::new(err)),
-                }
-            }
+            crate::memo::storage::MemoStoreError::MemoNotFound { id } => MemorandaError::Storage {
+                message: format!("Memo not found: {id}"),
+                source: Some(Box::new(err)),
+            },
+            crate::memo::storage::MemoStoreError::FileOperation { .. } => MemorandaError::Storage {
+                message: "File operation failed".to_string(),
+                source: Some(Box::new(err)),
+            },
+            crate::memo::storage::MemoStoreError::Serialization { .. } => MemorandaError::Storage {
+                message: "Serialization failed".to_string(),
+                source: Some(Box::new(err)),
+            },
             crate::memo::storage::MemoStoreError::InvalidFrontmatter { file, .. } => {
                 MemorandaError::Storage {
                     message: format!("Invalid frontmatter in file: {file}"),
@@ -236,11 +230,9 @@ impl From<crate::memo::storage::MemoStoreError> for MemorandaError {
                     source: Some(Box::new(err)),
                 }
             }
-            crate::memo::storage::MemoStoreError::Validation { .. } => {
-                MemorandaError::Validation {
-                    message: err.to_string(),
-                }
-            }
+            crate::memo::storage::MemoStoreError::Validation { .. } => MemorandaError::Validation {
+                message: err.to_string(),
+            },
             _ => MemorandaError::Storage {
                 message: err.to_string(),
                 source: Some(Box::new(err)),

@@ -200,8 +200,8 @@ pub fn init_logging_from_env() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use std::collections::HashMap;
+    use std::env;
 
     /// Safe environment variable management for tests
     struct TestEnvironment {
@@ -218,7 +218,8 @@ mod tests {
         fn set_var(&mut self, key: &str, value: &str) {
             // Store the original value before changing it
             if !self.original_values.contains_key(key) {
-                self.original_values.insert(key.to_string(), env::var(key).ok());
+                self.original_values
+                    .insert(key.to_string(), env::var(key).ok());
             }
             // SAFETY: Environment variable manipulation is encapsulated in a safe abstraction
             // that ensures proper cleanup via Drop trait, preventing test isolation issues.
@@ -230,7 +231,8 @@ mod tests {
         fn remove_var(&mut self, key: &str) {
             // Store the original value before removing it
             if !self.original_values.contains_key(key) {
-                self.original_values.insert(key.to_string(), env::var(key).ok());
+                self.original_values
+                    .insert(key.to_string(), env::var(key).ok());
             }
             // SAFETY: Environment variable manipulation is encapsulated in a safe abstraction
             // that ensures proper cleanup via Drop trait, preventing test isolation issues.
@@ -270,7 +272,7 @@ mod tests {
     #[test]
     fn test_config_from_env() {
         let mut test_env = TestEnvironment::new();
-        
+
         // Set environment variables safely
         test_env.set_var("MEMORANDA_LOG_LEVEL", "debug");
         test_env.set_var("MEMORANDA_LOG_JSON", "true");
@@ -315,7 +317,7 @@ mod tests {
     #[test]
     fn test_rust_log_fallback() {
         let mut test_env = TestEnvironment::new();
-        
+
         // Test that RUST_LOG is used as fallback
         test_env.set_var("RUST_LOG", "warn");
         test_env.remove_var("MEMORANDA_LOG_LEVEL");
