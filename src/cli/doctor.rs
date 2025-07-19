@@ -54,13 +54,13 @@ impl DoctorCommand {
     }
 
     /// Runs the system diagnostic checks and displays the results.
-    /// 
+    ///
     /// Performs various health checks on the system including Rust toolchain,
     /// system dependencies, git repository, memoranda directory structure,
     /// file permissions, memo formats, and MCP integration.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if any automatic fix operations fail when `auto_fix` is enabled.
     /// The function itself does not fail on diagnostic check failures - those are
     /// reported but do not cause the function to return an error.
@@ -460,9 +460,9 @@ impl DoctorCommand {
     }
 
     /// Fixes the .memoranda directory by creating it if missing or removing it if it's a file.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - Cannot remove existing .memoranda file
     /// - Cannot create .memoranda directory due to permissions or filesystem issues
@@ -481,9 +481,9 @@ impl DoctorCommand {
     }
 
     /// Fixes invalid memo file formats by renaming files with non-ULID names.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - Cannot read the .memoranda directory
     /// - File operations (rename, validation) fail due to permissions or I/O issues
@@ -530,9 +530,9 @@ impl DoctorCommand {
     }
 
     /// Fixes a memo filename by renaming it to use a ULID-based name.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - Cannot rename the file due to permissions, I/O issues, or filesystem constraints
     /// - Target filename already exists
@@ -549,9 +549,9 @@ impl DoctorCommand {
     }
 
     /// Validates a memo file for proper format, naming conventions, and content integrity.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - Filename is not ULID-based format
     /// - Cannot read file due to permissions or I/O issues  

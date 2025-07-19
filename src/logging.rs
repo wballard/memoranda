@@ -9,32 +9,47 @@ use tracing_subscriber::{
 
 use crate::error::{MemorandaError, Result};
 
+/// Output format configuration
+#[derive(Debug, Clone)]
+pub enum OutputFormat {
+    /// Plain text output with optional colors
+    Plain { use_colors: bool },
+    /// JSON format output
+    Json,
+}
+
+/// What information to include in logs
+#[derive(Debug, Clone)]
+pub struct IncludeOptions {
+    /// Whether to include file and line number in logs
+    pub location: bool,
+    /// Whether to include span information
+    pub spans: bool,
+}
+
 /// Configuration for the logging system
 #[derive(Debug, Clone)]
 pub struct LoggingConfig {
     /// Log level filter (e.g., "debug", "info", "warn", "error")
     pub level: String,
-    /// Whether to use JSON output format
-    pub json_format: bool,
     /// Optional file path for log output
     pub file_path: Option<String>,
-    /// Whether to include file and line number in logs
-    pub include_location: bool,
-    /// Whether to include span information
-    pub include_spans: bool,
-    /// Whether to use colored output (only applies to non-JSON format)
-    pub use_colors: bool,
+    /// Output format configuration
+    pub output_format: OutputFormat,
+    /// What information to include in logs
+    pub include: IncludeOptions,
 }
 
 impl Default for LoggingConfig {
     fn default() -> Self {
         Self {
             level: "info".to_string(),
-            json_format: false,
             file_path: None,
-            include_location: false,
-            include_spans: true,
-            use_colors: true,
+            output_format: OutputFormat::Plain { use_colors: true },
+            include: IncludeOptions {
+                location: false,
+                spans: true,
+            },
         }
     }
 }
@@ -52,9 +67,25 @@ impl LoggingConfig {
         }
 
         // Set JSON format from environment
-        if let Ok(json) = env::var("MEMORANDA_LOG_JSON") {
-            config.json_format = json.parse().unwrap_or(false);
-        }
+        let json_format = if let Ok(json) = env::var("MEMORANDA_LOG_JSON") {
+            json.parse().unwrap_or(false)
+        } else {
+            false
+        };
+
+        // Set color usage from environment
+        let use_colors = if let Ok(colors) = env::var("MEMORANDA_LOG_COLORS") {
+            colors.parse().unwrap_or(true)
+        } else {
+            true
+        };
+
+        // Set output format based on JSON and colors settings
+        config.output_format = if json_format {
+            OutputFormat::Json
+        } else {
+            OutputFormat::Plain { use_colors }
+        };
 
         // Set file output from environment
         if let Ok(file_path) = env::var("MEMORANDA_LOG_FILE") {
@@ -65,17 +96,12 @@ impl LoggingConfig {
 
         // Set location inclusion from environment
         if let Ok(location) = env::var("MEMORANDA_LOG_LOCATION") {
-            config.include_location = location.parse().unwrap_or(false);
+            config.include.location = location.parse().unwrap_or(false);
         }
 
         // Set span inclusion from environment
         if let Ok(spans) = env::var("MEMORANDA_LOG_SPANS") {
-            config.include_spans = spans.parse().unwrap_or(true);
-        }
-
-        // Set color usage from environment
-        if let Ok(colors) = env::var("MEMORANDA_LOG_COLORS") {
-            config.use_colors = colors.parse().unwrap_or(true);
+            config.include.spans = spans.parse().unwrap_or(true);
         }
 
         // Validate the configuration
@@ -106,33 +132,36 @@ pub fn init_logging(config: &LoggingConfig) -> Result<()> {
     let env_filter = create_env_filter(&config.level)?;
 
     // Create the base layer
-    let layer = if config.json_format {
-        // JSON format layer
-        fmt::layer()
-            .json()
-            .with_target(true)
-            .with_file(config.include_location)
-            .with_line_number(config.include_location)
-            .with_span_events(if config.include_spans {
-                FmtSpan::NEW | FmtSpan::CLOSE
-            } else {
-                FmtSpan::NONE
-            })
-            .boxed()
-    } else {
-        // Compact format layer
-        fmt::layer()
-            .compact()
-            .with_target(true)
-            .with_file(config.include_location)
-            .with_line_number(config.include_location)
-            .with_ansi(config.use_colors)
-            .with_span_events(if config.include_spans {
-                FmtSpan::NEW | FmtSpan::CLOSE
-            } else {
-                FmtSpan::NONE
-            })
-            .boxed()
+    let layer = match &config.output_format {
+        OutputFormat::Json => {
+            // JSON format layer
+            fmt::layer()
+                .json()
+                .with_target(true)
+                .with_file(config.include.location)
+                .with_line_number(config.include.location)
+                .with_span_events(if config.include.spans {
+                    FmtSpan::NEW | FmtSpan::CLOSE
+                } else {
+                    FmtSpan::NONE
+                })
+                .boxed()
+        }
+        OutputFormat::Plain { use_colors } => {
+            // Compact format layer
+            fmt::layer()
+                .compact()
+                .with_target(true)
+                .with_file(config.include.location)
+                .with_line_number(config.include.location)
+                .with_ansi(*use_colors)
+                .with_span_events(if config.include.spans {
+                    FmtSpan::NEW | FmtSpan::CLOSE
+                } else {
+                    FmtSpan::NONE
+                })
+                .boxed()
+        }
     };
 
     // Initialize the subscriber
@@ -145,8 +174,8 @@ pub fn init_logging(config: &LoggingConfig) -> Result<()> {
         let file_layer = fmt::layer()
             .with_writer(file)
             .with_target(true)
-            .with_file(config.include_location)
-            .with_line_number(config.include_location)
+            .with_file(config.include.location)
+            .with_line_number(config.include.location)
             .with_ansi(false); // No colors for file output
 
         tracing_subscriber::registry()
@@ -163,11 +192,10 @@ pub fn init_logging(config: &LoggingConfig) -> Result<()> {
 
     tracing::info!(
         level = %config.level,
-        json_format = config.json_format,
+        output_format = ?config.output_format,
         file_path = ?config.file_path,
-        include_location = config.include_location,
-        include_spans = config.include_spans,
-        use_colors = config.use_colors,
+        include_location = config.include.location,
+        include_spans = config.include.spans,
         "Logging initialized successfully"
     );
 
@@ -262,11 +290,13 @@ mod tests {
     fn test_default_config() {
         let config = LoggingConfig::default();
         assert_eq!(config.level, "info");
-        assert!(!config.json_format);
         assert!(config.file_path.is_none());
-        assert!(!config.include_location);
-        assert!(config.include_spans);
-        assert!(config.use_colors);
+        assert!(!config.include.location);
+        assert!(config.include.spans);
+        match config.output_format {
+            OutputFormat::Plain { use_colors } => assert!(use_colors),
+            OutputFormat::Json => panic!("Expected plain format"),
+        }
     }
 
     #[test]
@@ -282,10 +312,12 @@ mod tests {
 
         let config = LoggingConfig::from_env().unwrap();
         assert_eq!(config.level, "debug");
-        assert!(config.json_format);
-        assert!(config.include_location);
-        assert!(!config.include_spans);
-        assert!(!config.use_colors);
+        assert!(config.include.location);
+        assert!(!config.include.spans);
+        match config.output_format {
+            OutputFormat::Json => {}, // Expected
+            OutputFormat::Plain { .. } => panic!("Expected JSON format"),
+        }
 
         // Environment variables are automatically restored when test_env is dropped
     }

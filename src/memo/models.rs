@@ -48,13 +48,13 @@ pub struct Memo {
 
 impl Memo {
     /// Creates a new memo with the given title and content.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - Title is empty or exceeds maximum length
     /// - Content exceeds maximum length
-    #[must_use]
+    #[must_use = "creating a memo should be handled - check for validation errors"]
     pub fn new(title: String, content: String) -> Result<Self> {
         Self::validate_title(&title)?;
         Self::validate_content(&content)?;
@@ -72,13 +72,13 @@ impl Memo {
     }
 
     /// Creates a new memo with the given title, content, and optional file path.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - Title is empty or exceeds maximum length
     /// - Content exceeds maximum length
-    #[must_use]
+    #[must_use = "creating a memo should be handled - check for validation errors"]
     pub fn with_file_path(
         title: String,
         content: String,
@@ -106,9 +106,9 @@ impl Memo {
     }
 
     /// Updates the memo's content and sets the updated timestamp.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if the content exceeds the maximum allowed length.
     pub fn update_content(&mut self, content: String) -> Result<()> {
         Self::validate_content(&content)?;

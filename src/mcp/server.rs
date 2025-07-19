@@ -468,7 +468,10 @@ impl McpServer {
     }
 
     /// Extracts a string parameter from the arguments JSON.
-    fn extract_string_param<'a>(arguments: &'a serde_json::Value, param_name: &str) -> Result<&'a str> {
+    fn extract_string_param<'a>(
+        arguments: &'a serde_json::Value,
+        param_name: &str,
+    ) -> Result<&'a str> {
         arguments
             .get(param_name)
             .and_then(|v| v.as_str())
@@ -502,7 +505,10 @@ impl McpServer {
     }
 
     /// Handles create memo tool execution.
-    async fn execute_create_memo(memo_store: &crate::memo::MemoStore, arguments: &serde_json::Value) -> Result<String> {
+    async fn execute_create_memo(
+        memo_store: &crate::memo::MemoStore,
+        arguments: &serde_json::Value,
+    ) -> Result<String> {
         let title = Self::extract_string_param(arguments, "title")?;
         let content = Self::extract_string_param(arguments, "content")?;
 
@@ -511,7 +517,10 @@ impl McpServer {
     }
 
     /// Handles update memo tool execution.
-    async fn execute_update_memo(memo_store: &crate::memo::MemoStore, arguments: &serde_json::Value) -> Result<String> {
+    async fn execute_update_memo(
+        memo_store: &crate::memo::MemoStore,
+        arguments: &serde_json::Value,
+    ) -> Result<String> {
         let id_str = Self::extract_string_param(arguments, "id")?;
         let content = Self::extract_string_param(arguments, "content")?;
 
@@ -527,17 +536,24 @@ impl McpServer {
     }
 
     /// Handles get memo tool execution.
-    async fn execute_get_memo(memo_store: &crate::memo::MemoStore, arguments: &serde_json::Value) -> Result<String> {
+    async fn execute_get_memo(
+        memo_store: &crate::memo::MemoStore,
+        arguments: &serde_json::Value,
+    ) -> Result<String> {
         let id_str = Self::extract_string_param(arguments, "id")?;
         let memo_id = Self::parse_memo_id(id_str)?;
 
-        let memo = memo_store.get_memo(&memo_id)?
+        let memo = memo_store
+            .get_memo(&memo_id)?
             .ok_or_else(|| anyhow::anyhow!("Memo not found with ID: {}", memo_id))?;
         Ok(serde_json::to_string_pretty(&memo)?)
     }
 
     /// Handles delete memo tool execution.
-    async fn execute_delete_memo(memo_store: &crate::memo::MemoStore, arguments: &serde_json::Value) -> Result<String> {
+    async fn execute_delete_memo(
+        memo_store: &crate::memo::MemoStore,
+        arguments: &serde_json::Value,
+    ) -> Result<String> {
         let id_str = Self::extract_string_param(arguments, "id")?;
         let memo_id = Self::parse_memo_id(id_str)?;
 
@@ -549,7 +565,10 @@ impl McpServer {
     }
 
     /// Handles search memos tool execution.
-    async fn execute_search_memos(memo_store: &crate::memo::MemoStore, arguments: &serde_json::Value) -> Result<String> {
+    async fn execute_search_memos(
+        memo_store: &crate::memo::MemoStore,
+        arguments: &serde_json::Value,
+    ) -> Result<String> {
         let query = Self::extract_string_param(arguments, "query")?;
 
         // Simple search implementation like in the original function
@@ -568,13 +587,13 @@ impl McpServer {
     /// Handles get all context tool execution.
     async fn execute_get_all_context(memo_store: &crate::memo::MemoStore) -> Result<String> {
         let all_memos = memo_store.list_memos()?;
-        
+
         let context = all_memos
             .into_iter()
             .map(|memo| format!("# {}\n{}", memo.title, memo.content))
             .collect::<Vec<_>>()
             .join("\n\n---\n\n");
-        
+
         Ok(context)
     }
 

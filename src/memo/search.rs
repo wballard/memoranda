@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use regex::Regex;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::fmt::Write;
 use tracing::warn;
 
 use super::models::{Memo, MemoId};
@@ -290,14 +291,15 @@ impl MemoSearcher {
         let mut context = String::new();
 
         for memo in memos {
-            context.push_str(&format!(
+            let _ = write!(
+                context,
                 "# {}\n\n**Created:** {}\n**Updated:** {}\n**Tags:** {}\n\n{}\n\n---\n\n",
                 memo.title,
                 memo.created_at.format("%Y-%m-%d %H:%M:%S"),
                 memo.updated_at.format("%Y-%m-%d %H:%M:%S"),
                 memo.tags.join(", "),
                 memo.content
-            ));
+            );
         }
 
         context

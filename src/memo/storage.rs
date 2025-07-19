@@ -597,9 +597,10 @@ impl MemoStore {
             RetryConfig::for_file_io(),
             "rename_memo_file",
         )
-        .inspect_err(|_| {
+        .map_err(|e| {
             // Clean up temporary file on failure
             let _ = fs::remove_file(&temp_file_path);
+            e
         })?;
 
         Ok(())

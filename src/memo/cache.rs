@@ -97,7 +97,7 @@ impl MemoCache {
         }
     }
 
-    /// Create cache with legacy parameters (deprecated, use with_cache_config)
+    /// Create cache with legacy parameters (deprecated, use `with_cache_config`)
     #[must_use]
     pub fn with_config(max_capacity: u64, ttl_seconds: u64) -> Self {
         let config = CacheConfig {
@@ -186,7 +186,6 @@ impl MemoCache {
         self.reset_stats().await;
     }
 
-
     pub async fn get_stats(&self) -> CacheStats {
         self.stats.read().await.clone()
     }
@@ -205,7 +204,10 @@ impl MemoCache {
             if total_requests == 0 {
                 0.0
             } else {
-                stats.memo_hits as f64 / total_requests as f64
+                #[allow(clippy::cast_precision_loss)]
+                {
+                    stats.memo_hits as f64 / total_requests as f64
+                }
             }
         } else {
             // If we can't read stats (lock contention), return 0.0 as fallback
@@ -220,7 +222,10 @@ impl MemoCache {
         if total_requests == 0 {
             0.0
         } else {
-            stats.memo_hits as f64 / total_requests as f64
+            #[allow(clippy::cast_precision_loss)]
+            {
+                stats.memo_hits as f64 / total_requests as f64
+            }
         }
     }
 

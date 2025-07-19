@@ -196,7 +196,7 @@ impl From<crate::memo::storage::MemoStoreError> for StorageError {
             }
             _ => StorageError::FileSystemError {
                 message: err.to_string(),
-                source: std::io::Error::other(err.to_string()),
+                source: std::io::Error::new(std::io::ErrorKind::Other, err.to_string()),
             },
         }
     }
