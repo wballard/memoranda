@@ -11,7 +11,55 @@ Memoranda is a Rust-based command-line tool and MCP (Model Context Protocol) ser
 - **AI Integration**: Native MCP server for seamless integration with AI assistants
 - **High Performance**: Built in Rust with async I/O and intelligent caching
 - **Developer-Friendly**: Simple CLI interface designed for coding workflows
-- **Context-Aware**: Intelligent search and retrieval of notes with full-text search
+- **Context-Aware**: Intelligent search and retrieval of memos with full-text search
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Installation](#installation)
+  - [Option 1: Install from Git (Recommended)](#option-1-install-from-git-recommended)
+  - [Option 2: Build from Source](#option-2-build-from-source)
+  - [Requirements](#requirements)
+- [Quick Start](#quick-start)
+  - [1. Verify Installation](#1-verify-installation)
+  - [2. Start MCP Server](#2-start-mcp-server)
+  - [3. Configure Claude Code Integration](#3-configure-claude-code-integration)
+- [CLI Commands](#cli-commands)
+  - [`memoranda doctor`](#memoranda-doctor)
+  - [`memoranda serve`](#memoranda-serve)
+  - [`memoranda help`](#memoranda-help)
+  - [`memoranda --version`](#memoranda---version)
+- [MCP Tools](#mcp-tools)
+  - [`create_memo`](#create_memo)
+  - [`update_memo`](#update_memo)
+  - [`list_memos`](#list_memos)
+  - [`get_memo`](#get_memo)
+  - [`delete_memo`](#delete_memo)
+  - [`search_memos`](#search_memos)
+  - [`get_all_context`](#get_all_context)
+- [Configuration](#configuration)
+- [Usage Examples](#usage-examples)
+  - [Basic Memo Management via AI Assistant](#basic-memo-management-via-ai-assistant)
+  - [Development Workflow Integration](#development-workflow-integration)
+  - [Real-World Scenarios](#real-world-scenarios)
+- [Advanced Integration](#advanced-integration)
+  - [Environment Variables](#environment-variables)
+  - [Claude Code Advanced Configuration](#claude-code-advanced-configuration)
+  - [Using with Other MCP Clients](#using-with-other-mcp-clients)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues](#common-issues)
+  - [Getting Help](#getting-help)
+- [Development](#development)
+  - [Prerequisites](#prerequisites)
+  - [Development Setup](#development-setup)
+  - [Testing](#testing)
+  - [Project Architecture](#project-architecture)
+  - [Data Models](#data-models)
+  - [Performance Characteristics](#performance-characteristics)
+  - [Contributing](#contributing)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
 
 ## Features
 
@@ -178,6 +226,8 @@ Create a new memo with title and content.
 }
 ```
 
+**Returns:** Newly created memo object with generated ID and timestamps.
+
 **Example:**
 ```json
 {
@@ -198,7 +248,9 @@ Update the content of an existing memo.
 }
 ```
 
-**Example:**
+**Returns:** Updated memo object with new content and updated timestamp.
+
+**Example:
 ```json
 {
   "id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
@@ -228,7 +280,9 @@ Retrieve a specific memo by its ID.
 }
 ```
 
-**Example:**
+**Returns:** Complete memo object with all fields and content.
+
+**Example:
 ```json
 {
   "id": "01ARZ3NDEKTSV4RRFFQ69G5FAV"
@@ -246,7 +300,9 @@ Delete a memo by its ID.
 }
 ```
 
-**Example:**
+**Returns:** Confirmation of successful deletion.
+
+**Example:
 ```json
 {
   "id": "01ARZ3NDEKTSV4RRFFQ69G5FAV"
@@ -264,7 +320,9 @@ Search memos by query string (searches both title and content).
 }
 ```
 
-**Example:**
+**Returns:** Array of matching memo objects with relevance ranking.
+
+**Example:
 ```json
 {
   "query": "authentication API bearer"
@@ -297,7 +355,7 @@ Configuration is managed through the settings system. Default settings include:
 
 Once memoranda is configured with Claude Code, you can manage memos through natural language:
 
-```
+```text
 "Create a memo about REST API best practices"
 "Search for memos about authentication"
 "Update the memo about API patterns with new security information"
@@ -307,20 +365,20 @@ Once memoranda is configured with Claude Code, you can manage memos through natu
 ### Development Workflow Integration
 
 **Storing Code Patterns:**
-```
+```text
 "Create a memo titled 'Error Handling Pattern' with the content: 
 'Use Result<T, E> for recoverable errors. Implement Display and Error traits. 
 Use anyhow for application errors with context.'"
 ```
 
 **Documenting Decisions:**
-```
+```text
 "Store this architectural decision: We're using async/await for I/O operations 
 to improve performance. All database calls should be non-blocking."
 ```
 
 **Capturing Learning:**
-```
+```text
 "Save a memo about Rust ownership rules: 
 'Each value has exactly one owner. When owner goes out of scope, value is dropped. 
 References don't take ownership.'"
@@ -351,7 +409,9 @@ Track your learning progress and insights:
 
 ## Advanced Integration
 
-### Environment Variables
+This section covers advanced integration scenarios for power users and custom deployments.
+
+### Environment Configuration
 
 Configure memoranda behavior through environment variables:
 
@@ -366,9 +426,9 @@ export MEMORANDA_DATA_DIR=/custom/path
 export MEMORANDA_VERBOSE_ERRORS=true
 ```
 
-### Claude Code Advanced Configuration
+### Claude Code Integration
 
-For advanced Claude Code integration, configure in your MCP settings:
+For advanced Claude Code integration, configure memoranda in your MCP settings with custom environment variables and paths:
 
 ```json
 {
@@ -385,9 +445,9 @@ For advanced Claude Code integration, configure in your MCP settings:
 }
 ```
 
-### Using with Other MCP Clients
+### Custom MCP Client Integration
 
-Memoranda works with any MCP-compatible client:
+Memoranda is compatible with any MCP-compatible client. Here's an example using Python:
 
 ```python
 # Example Python client integration
@@ -507,7 +567,7 @@ cargo test --features stress_tests
 
 ### Project Architecture
 
-```
+```text
 src/
 ├── main.rs              # CLI entry point and error handling
 ├── lib.rs               # Library exports and public API

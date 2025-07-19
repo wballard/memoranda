@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn, instrument};
+use tracing::{debug, info, instrument, warn};
 
 use super::models::{Memo, MemoId};
 use super::storage::{MemoStoreError, Result};
@@ -22,7 +22,7 @@ impl Default for CacheConfig {
         Self {
             memo_cache_size: 1000,
             metadata_cache_size: 5000,
-            memo_ttl_seconds: 3600, // 1 hour
+            memo_ttl_seconds: 3600,     // 1 hour
             metadata_ttl_multiplier: 2, // Metadata lives twice as long as memos
         }
     }
@@ -208,7 +208,7 @@ impl MemoCache {
             0.0
         }
     }
-    
+
     /// Calculate the cache hit ratio asynchronously with guaranteed accuracy
     pub async fn cache_hit_ratio_async(&self) -> f64 {
         let stats = self.stats.read().await;
@@ -265,12 +265,20 @@ impl MemoCache {
         if let Some(cached_metadata) = self.get_metadata(file_path).await {
             // Check file modification time
             let file_metadata = std::fs::metadata(file_path).map_err(|e| {
-                warn!("Failed to read file metadata for {}: {}", file_path.display(), e);
+                warn!(
+                    "Failed to read file metadata for {}: {}",
+                    file_path.display(),
+                    e
+                );
                 MemoStoreError::FileOperation { source: e }
             })?;
 
             let current_modified = file_metadata.modified().map_err(|e| {
-                warn!("Failed to get modification time for {}: {}", file_path.display(), e);
+                warn!(
+                    "Failed to get modification time for {}: {}",
+                    file_path.display(),
+                    e
+                );
                 MemoStoreError::FileOperation { source: e }
             })?;
 

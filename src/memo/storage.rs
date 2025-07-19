@@ -120,7 +120,7 @@ impl MemoStore {
     fn is_markdown_file(path: &Path) -> bool {
         path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md")
     }
-    
+
     // Helper function to create and cache memo metadata
     async fn create_and_cache_metadata(&self, memo: &Memo, file_path: &Path) -> Result<()> {
         if let Ok(file_metadata) = async_fs::metadata(file_path).await {
@@ -132,12 +132,14 @@ impl MemoStore {
                     last_modified,
                     file_size: file_metadata.len(),
                 };
-                self.cache.put_metadata(file_path.to_path_buf(), metadata).await;
+                self.cache
+                    .put_metadata(file_path.to_path_buf(), metadata)
+                    .await;
             }
         }
         Ok(())
     }
-    
+
     // Helper function to parse frontmatter and extract memo ID from content
     fn extract_memo_id_from_content(content: &str, file_path: &Path) -> Result<Option<MemoId>> {
         if !content.starts_with("---\n") {
