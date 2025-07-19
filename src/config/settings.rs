@@ -45,21 +45,21 @@ impl Settings {
 
     pub fn validate(&self) -> Result<()> {
         if self.mcp_server_port < MIN_VALID_PORT {
-            return Err(MemorandaError::Validation(format!(
+            return Err(MemorandaError::validation(format!(
                 "Invalid port number: {}. Port must be {} or higher",
                 self.mcp_server_port, MIN_VALID_PORT
             )));
         }
 
         if self.log_level.is_empty() {
-            return Err(MemorandaError::Validation(
-                "Log level cannot be empty".to_string(),
+            return Err(MemorandaError::validation(
+                "Log level cannot be empty"
             ));
         }
 
         if self.minimum_rust_version.is_empty() {
-            return Err(MemorandaError::Validation(
-                "Minimum Rust version cannot be empty".to_string(),
+            return Err(MemorandaError::validation(
+                "Minimum Rust version cannot be empty"
             ));
         }
 
@@ -67,14 +67,14 @@ impl Settings {
         match semver::Version::parse(&self.minimum_rust_version) {
             Ok(version) => {
                 if !version.pre.is_empty() || !version.build.is_empty() {
-                    return Err(MemorandaError::Validation(format!(
+                    return Err(MemorandaError::validation(format!(
                         "Invalid minimum Rust version format: {}. Must be a stable version (e.g., 1.70.0), pre-release and build metadata are not allowed",
                         self.minimum_rust_version
                     )));
                 }
             }
             Err(_) => {
-                return Err(MemorandaError::Validation(format!(
+                return Err(MemorandaError::validation(format!(
                     "Invalid minimum Rust version format: {}. Must be in semver format (e.g., 1.70.0)",
                     self.minimum_rust_version
                 )));
@@ -82,9 +82,8 @@ impl Settings {
         }
 
         if self.max_memo_file_size < MIN_MEMO_FILE_SIZE {
-            return Err(MemorandaError::Validation(format!(
-                "Maximum memo file size must be at least {} bytes",
-                MIN_MEMO_FILE_SIZE
+            return Err(MemorandaError::validation(format!(
+                "Maximum memo file size must be at least {MIN_MEMO_FILE_SIZE} bytes"
             )));
         }
 

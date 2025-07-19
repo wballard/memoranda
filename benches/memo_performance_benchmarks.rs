@@ -1,8 +1,8 @@
-/// Performance Benchmarks for Memoranda Core Components
-/// 
-/// These benchmarks test the performance characteristics of core components
-/// including large collection handling, search performance, and memory usage
-/// to ensure the system can handle production workloads efficiently.
+//! Performance Benchmarks for Memoranda Core Components
+//! 
+//! These benchmarks test the performance characteristics of core components
+//! including large collection handling, search performance, and memory usage
+//! to ensure the system can handle production workloads efficiently.
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use memoranda::memo::{Memo, MemoId, MemoStore, MemoSearcher, SearchQuery, SearchResult};
@@ -23,7 +23,7 @@ const LARGE_CONTENT_SIZE: usize = 10_000;
 
 /// Create a test memo with specified title and content size
 fn create_test_memo(id: usize, content_size: usize) -> Memo {
-    let title = format!("Test Memo #{}", id);
+    let title = format!("Test Memo #{id}");
     let content = format!(
         "This is test memo content {} - {}",
         id,
@@ -213,11 +213,11 @@ fn bench_filesystem_operations(c: &mut Criterion) {
             &size,
             |b, &size| {
                 b.iter_batched(
-                    || create_test_store(),
+                    create_test_store,
                     |(store, _temp_dir)| {
                         for i in 0..size {
-                            let title = format!("Benchmark Memo {}", i);
-                            let content = format!("Content for memo {}", i);
+                            let title = format!("Benchmark Memo {i}");
+                            let content = format!("Content for memo {i}");
                             black_box(store.create_memo(title, content).unwrap());
                         }
                     },
@@ -234,8 +234,8 @@ fn bench_filesystem_operations(c: &mut Criterion) {
                     || {
                         let (store, temp_dir) = create_test_store();
                         for i in 0..size {
-                            let title = format!("Benchmark Memo {}", i);
-                            let content = format!("Content for memo {}", i);
+                            let title = format!("Benchmark Memo {i}");
+                            let content = format!("Content for memo {i}");
                             store.create_memo(title, content).unwrap();
                         }
                         (store, temp_dir)
@@ -262,8 +262,8 @@ fn bench_memo_store_operations(c: &mut Criterion) {
     
     // Create test memos
     for i in 0..1000 {
-        let title = format!("Store Benchmark Memo {}", i);
-        let content = format!("Content for store benchmark memo {}", i);
+        let title = format!("Store Benchmark Memo {i}");
+        let content = format!("Content for store benchmark memo {i}");
         let memo = store.create_memo(title, content).unwrap();
         memo_ids.push(memo.id);
     }
@@ -286,7 +286,7 @@ fn bench_memo_store_operations(c: &mut Criterion) {
         let mut counter = 0;
         b.iter(|| {
             counter += 1;
-            let new_content = format!("Updated content {}", counter);
+            let new_content = format!("Updated content {counter}");
             black_box(store.update_memo(id, new_content).unwrap())
         });
     });

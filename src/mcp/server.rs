@@ -1,53 +1,82 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::io::Write;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::signal;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn, span, Level};
+use ulid::Ulid;
 
 use super::tools::McpTool;
+use crate::error::McpError;
 use crate::memo::MemoStore;
+use crate::utils::{retry_with_backoff_sync, RetryConfig};
 
 const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
 const CONTEXT_SEPARATOR: &str = "\n\n---\n\n";
 
 pub struct McpServer {
     pub name: String,
-    memo_store: MemoStore,
+    memo_store: Option<MemoStore>,
     tools: Vec<McpTool>,
 }
 
 impl McpServer {
     pub fn new(name: String) -> Result<Self> {
-        info!("Creating MCP server: {}", name);
-        let tools = vec![
-            McpTool::new(
-                "create_memo".to_string(),
-                "Create a new memo with title and content".to_string(),
-            ),
-            McpTool::new(
-                "update_memo".to_string(),
-                "Update an existing memo by ID".to_string(),
-            ),
-            McpTool::new(
-                "list_memos".to_string(),
-                "List all stored memos".to_string(),
-            ),
-            McpTool::new(
-                "get_memo".to_string(),
-                "Get a specific memo by ID".to_string(),
-            ),
-            McpTool::new("delete_memo".to_string(), "Delete a memo by ID".to_string()),
-            McpTool::new(
-                "search_memos".to_string(),
-                "Search memo content by text pattern".to_string(),
-            ),
-            McpTool::new(
-                "get_all_context".to_string(),
-                "Combine all memos for LLM context".to_string(),
-            ),
-        ];
+        let _span = span!(Level::INFO, "mcp_server_new", server_name = %name).entered();
+        info!(server_name = %name, "Creating MCP server");
+        
+        // Try to initialize memo store with retry mechanism
+        let memo_store = Self::try_initialize_memo_store();
+        
+        let tools = if memo_store.is_some() {
+            // Full functionality when memo store is available
+            vec![
+                McpTool::new(
+                    "create_memo".to_string(),
+                    "Create a new memo with title and content".to_string(),
+                ),
+                McpTool::new(
+                    "update_memo".to_string(),
+                    "Update an existing memo by ID".to_string(),
+                ),
+                McpTool::new(
+                    "list_memos".to_string(),
+                    "List all stored memos".to_string(),
+                ),
+                McpTool::new(
+                    "get_memo".to_string(),
+                    "Get a specific memo by ID".to_string(),
+                ),
+                McpTool::new("delete_memo".to_string(), "Delete a memo by ID".to_string()),
+                McpTool::new(
+                    "search_memos".to_string(),
+                    "Search memo content by text pattern".to_string(),
+                ),
+                McpTool::new(
+                    "get_all_context".to_string(),
+                    "Combine all memos for LLM context".to_string(),
+                ),
+            ]
+        } else {
+            // Limited functionality when memo store is unavailable
+            warn!("MCP server starting with limited functionality - memo store unavailable");
+            vec![
+                McpTool::new(
+                    "server_status".to_string(),
+                    "Get server status and available functionality".to_string(),
+                ),
+                McpTool::new(
+                    "retry_memo_store".to_string(),
+                    "Attempt to reinitialize the memo store".to_string(),
+                ),
+            ]
+        };
 
-        let memo_store = MemoStore::from_git_root()?;
+        info!(
+            tool_count = tools.len(),
+            memo_store_available = memo_store.is_some(),
+            "MCP server initialized"
+        );
+        
         Ok(Self {
             name,
             memo_store,
@@ -55,20 +84,110 @@ impl McpServer {
         })
     }
 
-    pub async fn start(&self) -> Result<()> {
-        info!("Starting MCP server: {}", self.name);
+    /// Try to initialize memo store with retry logic
+    fn try_initialize_memo_store() -> Option<MemoStore> {
+        let result = retry_with_backoff_sync(
+            || MemoStore::from_git_root().map_err(anyhow::Error::from),
+            RetryConfig::for_network(), // Use network config for more retries
+            "memo_store_initialization",
+        );
+
+        match result {
+            Ok(store) => {
+                info!("Memo store initialized successfully");
+                Some(store)
+            }
+            Err(e) => {
+                warn!(error = %e, "Failed to initialize memo store - server will run with limited functionality");
+                None
+            }
+        }
+    }
+
+    /// Attempt to reinitialize the memo store
+    pub fn retry_memo_store_initialization(&mut self) -> Result<bool> {
+        if self.memo_store.is_some() {
+            info!("Memo store is already initialized");
+            return Ok(true);
+        }
+
+        info!("Attempting to reinitialize memo store");
+        
+        if let Some(store) = Self::try_initialize_memo_store() {
+            self.memo_store = Some(store);
+            
+            // Update tools to full functionality
+            self.tools = vec![
+                McpTool::new(
+                    "create_memo".to_string(),
+                    "Create a new memo with title and content".to_string(),
+                ),
+                McpTool::new(
+                    "update_memo".to_string(),
+                    "Update an existing memo by ID".to_string(),
+                ),
+                McpTool::new(
+                    "list_memos".to_string(),
+                    "List all stored memos".to_string(),
+                ),
+                McpTool::new(
+                    "get_memo".to_string(),
+                    "Get a specific memo by ID".to_string(),
+                ),
+                McpTool::new("delete_memo".to_string(), "Delete a memo by ID".to_string()),
+                McpTool::new(
+                    "search_memos".to_string(),
+                    "Search memo content by text pattern".to_string(),
+                ),
+                McpTool::new(
+                    "get_all_context".to_string(),
+                    "Combine all memos for LLM context".to_string(),
+                ),
+            ];
+            
+            info!("Memo store successfully reinitialized - full functionality restored");
+            Ok(true)
+        } else {
+            warn!("Failed to reinitialize memo store - continuing with limited functionality");
+            Ok(false)
+        }
+    }
+
+    /// Get server status and available functionality
+    pub fn get_server_status(&self) -> serde_json::Value {
+        serde_json::json!({
+            "server_name": self.name,
+            "memo_store_available": self.memo_store.is_some(),
+            "available_tools": self.tools.iter().map(|t| t.to_tool_definition().name).collect::<Vec<_>>(),
+            "functionality": if self.memo_store.is_some() {
+                "full"
+            } else {
+                "limited"
+            },
+            "status": "running"
+        })
+    }
+
+    pub async fn start(&mut self) -> Result<()> {
+        let _span = span!(Level::INFO, "mcp_server_start", server_name = %self.name).entered();
+        info!(server_name = %self.name, "Starting MCP server");
 
         // Setup signal handling for graceful shutdown
-        let mut sigint = signal::unix::signal(signal::unix::SignalKind::interrupt())?;
-        let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())?;
+        let mut sigint = signal::unix::signal(signal::unix::SignalKind::interrupt())
+            .context("Failed to setup SIGINT handler")
+            .map_err(|e| McpError::server_initialization_failed(format!("Signal handling setup failed: {e}")))?;
+        let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
+            .context("Failed to setup SIGTERM handler")
+            .map_err(|e| McpError::server_initialization_failed(format!("Signal handling setup failed: {e}")))?;
 
         let stdin = tokio::io::stdin();
         let mut reader = BufReader::new(stdin);
         let mut stdout = std::io::stdout();
 
-        info!("MCP server listening on stdio: {}", self.name);
+        info!(server_name = %self.name, "MCP server listening on stdio");
 
         let mut initialized = false;
+        let mut message_count = 0u64;
 
         // Process incoming messages with signal handling
         loop {
@@ -102,45 +221,61 @@ impl McpServer {
                                 continue;
                             }
 
-                            info!("Received message: {}", line);
+                            message_count += 1;
+                            let message_id = Ulid::new();
+                            let _msg_span = span!(Level::DEBUG, "mcp_message", 
+                                message_id = %message_id, 
+                                message_count = message_count
+                            ).entered();
+                            
+                            debug!(message_id = %message_id, raw_message = %line, "Received MCP message");
 
-                            // Parse JSON-RPC message
+                            // Parse JSON-RPC message with better error handling
                             match serde_json::from_str::<serde_json::Value>(line) {
                                 Ok(message) => {
+                                    let start_time = std::time::Instant::now();
                                     let response = self.handle_message_internal(message, &mut initialized).await;
+                                    let duration = start_time.elapsed();
+                                    
+                                    debug!(message_id = %message_id, duration_ms = duration.as_millis(), "Message processing completed");
+                                    
                                     if let Some(response) = response {
                                         if let Err(e) = writeln!(stdout, "{response}") {
-                                            error!("Failed to write response: {}", e);
+                                            error!(message_id = %message_id, error = %e, "Failed to write response to stdout");
                                             break;
                                         }
                                         if let Err(e) = stdout.flush() {
-                                            error!("Failed to flush stdout: {}", e);
+                                            error!(message_id = %message_id, error = %e, "Failed to flush stdout");
                                             break;
                                         }
+                                        debug!(message_id = %message_id, "Response sent successfully");
                                     }
                                 }
                                 Err(e) => {
-                                    warn!("Invalid JSON received: {}", e);
+                                    warn!(message_id = %message_id, error = %e, raw_message = %line, "Failed to parse JSON-RPC message");
                                     let error_response = serde_json::json!({
                                         "jsonrpc": "2.0",
                                         "error": {
                                             "code": -32700,
-                                            "message": "Parse error"
+                                            "message": "Parse error",
+                                            "data": {
+                                                "details": e.to_string()
+                                            }
                                         }
                                     });
                                     if let Err(e) = writeln!(stdout, "{error_response}") {
-                                        error!("Failed to write error response: {}", e);
+                                        error!(message_id = %message_id, error = %e, "Failed to write error response");
                                         break;
                                     }
                                     if let Err(e) = stdout.flush() {
-                                        error!("Failed to flush stdout: {}", e);
+                                        error!(message_id = %message_id, error = %e, "Failed to flush stdout after error");
                                         break;
                                     }
                                 }
                             }
                         }
                         Err(e) => {
-                            error!("Error reading from stdin: {}", e);
+                            error!(error = %e, "Error reading from stdin, shutting down server");
                             break;
                         }
                     }
@@ -153,7 +288,7 @@ impl McpServer {
     }
 
     pub async fn handle_message(
-        &self,
+        &mut self,
         message: serde_json::Value,
         initialized: &mut bool,
     ) -> Option<serde_json::Value> {
@@ -161,7 +296,7 @@ impl McpServer {
     }
 
     async fn handle_message_internal(
-        &self,
+        &mut self,
         message: serde_json::Value,
         initialized: &mut bool,
     ) -> Option<serde_json::Value> {
@@ -324,17 +459,48 @@ impl McpServer {
 
         Self {
             name,
-            memo_store,
+            memo_store: Some(memo_store),
             tools,
         }
     }
 
     pub async fn execute_tool(
-        &self,
+        &mut self,
         tool_name: &str,
         arguments: serde_json::Value,
     ) -> Result<String> {
         info!("Executing tool: {} with args: {}", tool_name, arguments);
+
+        // Handle limited functionality tools first
+        match tool_name {
+            "server_status" => {
+                return Ok(serde_json::to_string_pretty(&self.get_server_status())?);
+            }
+            
+            "retry_memo_store" => {
+                let success = self.retry_memo_store_initialization()?;
+                return Ok(serde_json::to_string_pretty(&serde_json::json!({
+                    "success": success,
+                    "message": if success {
+                        "Memo store successfully reinitialized - full functionality restored"
+                    } else {
+                        "Failed to reinitialize memo store - continuing with limited functionality"
+                    }
+                }))?);
+            }
+            
+            _ => {}
+        }
+
+        // Check if memo store is available for memo operations
+        let memo_store = match &self.memo_store {
+            Some(store) => store,
+            None => {
+                return Err(anyhow::anyhow!(
+                    "Memo store is not available. Use 'retry_memo_store' to attempt reinitialization or 'server_status' to check server status."
+                ));
+            }
+        };
 
         match tool_name {
             "create_memo" => {
@@ -347,8 +513,7 @@ impl McpServer {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing required parameter: content"))?;
 
-                let memo = self
-                    .memo_store
+                let memo = memo_store
                     .create_memo(title.to_string(), content.to_string())?;
                 Ok(serde_json::to_string_pretty(&memo)?)
             }
@@ -368,12 +533,12 @@ impl McpServer {
                     .map_err(|_| anyhow::anyhow!("Invalid memo ID format"))?;
                 let memo_id = crate::memo::MemoId::from_ulid(memo_id);
 
-                let memo = self.memo_store.update_memo(&memo_id, content.to_string())?;
+                let memo = memo_store.update_memo(&memo_id, content.to_string())?;
                 Ok(serde_json::to_string_pretty(&memo)?)
             }
 
             "list_memos" => {
-                let memos = self.memo_store.list_memos()?;
+                let memos = memo_store.list_memos()?;
                 Ok(serde_json::to_string_pretty(&memos)?)
             }
 
@@ -388,7 +553,7 @@ impl McpServer {
                     .map_err(|_| anyhow::anyhow!("Invalid memo ID format"))?;
                 let memo_id = crate::memo::MemoId::from_ulid(memo_id);
 
-                match self.memo_store.get_memo(&memo_id)? {
+                match memo_store.get_memo(&memo_id)? {
                     Some(memo) => Ok(serde_json::to_string_pretty(&memo)?),
                     None => Err(anyhow::anyhow!("Memo not found: {}", id_str)),
                 }
@@ -405,7 +570,7 @@ impl McpServer {
                     .map_err(|_| anyhow::anyhow!("Invalid memo ID format"))?;
                 let memo_id = crate::memo::MemoId::from_ulid(memo_id);
 
-                self.memo_store.delete_memo(&memo_id)?;
+                memo_store.delete_memo(&memo_id)?;
                 Ok(format!("Memo {id_str} deleted successfully"))
             }
 
@@ -415,7 +580,7 @@ impl McpServer {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing required parameter: query"))?;
 
-                let memos = self.memo_store.list_memos()?;
+                let memos = memo_store.list_memos()?;
                 let matching_memos: Vec<_> = memos
                     .into_iter()
                     .filter(|memo| {
@@ -428,7 +593,7 @@ impl McpServer {
             }
 
             "get_all_context" => {
-                let memos = self.memo_store.list_memos()?;
+                let memos = memo_store.list_memos()?;
                 let mut context = String::new();
 
                 for memo in memos {

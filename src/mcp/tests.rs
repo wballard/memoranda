@@ -31,7 +31,7 @@ mod unit_tests {
 
     #[tokio::test]
     async fn test_create_memo_tool() -> Result<()> {
-        let (server, _temp_dir) = create_test_server()?;
+        let (mut server, _temp_dir) = create_test_server()?;
 
         let args = json!({
             "title": "Test Memo",
@@ -49,7 +49,7 @@ mod unit_tests {
 
     #[tokio::test]
     async fn test_list_memos_tool() -> Result<()> {
-        let (server, _temp_dir) = create_test_server()?;
+        let (mut server, _temp_dir) = create_test_server()?;
 
         // Create a memo first
         let create_args = json!({
@@ -77,7 +77,7 @@ mod unit_tests {
 
     #[tokio::test]
     async fn test_get_memo_tool() -> Result<()> {
-        let (server, _temp_dir) = create_test_server()?;
+        let (mut server, _temp_dir) = create_test_server()?;
 
         // Create a memo first
         let create_args = json!({
@@ -104,7 +104,7 @@ mod unit_tests {
 
     #[tokio::test]
     async fn test_update_memo_tool() -> Result<()> {
-        let (server, _temp_dir) = create_test_server()?;
+        let (mut server, _temp_dir) = create_test_server()?;
 
         // Create a memo first
         let create_args = json!({
@@ -132,7 +132,7 @@ mod unit_tests {
 
     #[tokio::test]
     async fn test_delete_memo_tool() -> Result<()> {
-        let (server, _temp_dir) = create_test_server()?;
+        let (mut server, _temp_dir) = create_test_server()?;
 
         // Create a memo first
         let create_args = json!({
@@ -165,7 +165,7 @@ mod unit_tests {
 
     #[tokio::test]
     async fn test_search_memos_tool() -> Result<()> {
-        let (server, _temp_dir) = create_test_server()?;
+        let (mut server, _temp_dir) = create_test_server()?;
 
         // Create test memos
         let create_args1 = json!({
@@ -205,7 +205,7 @@ mod unit_tests {
 
     #[tokio::test]
     async fn test_get_all_context_tool() -> Result<()> {
-        let (server, _temp_dir) = create_test_server()?;
+        let (mut server, _temp_dir) = create_test_server()?;
 
         // Create test memos
         let create_args1 = json!({
@@ -235,7 +235,7 @@ mod unit_tests {
 
     #[tokio::test]
     async fn test_invalid_tool_name() -> Result<()> {
-        let (server, _temp_dir) = create_test_server()?;
+        let (mut server, _temp_dir) = create_test_server()?;
 
         let result = server.execute_tool("nonexistent_tool", json!({})).await;
         assert!(result.is_err());
@@ -246,7 +246,7 @@ mod unit_tests {
 
     #[tokio::test]
     async fn test_missing_required_parameters() -> Result<()> {
-        let (server, _temp_dir) = create_test_server()?;
+        let (mut server, _temp_dir) = create_test_server()?;
 
         // Test create_memo without title
         let result = server
@@ -287,7 +287,7 @@ mod unit_tests {
 
     #[tokio::test]
     async fn test_invalid_memo_id() -> Result<()> {
-        let (server, _temp_dir) = create_test_server()?;
+        let (mut server, _temp_dir) = create_test_server()?;
 
         // Test with invalid ULID format
         let result = server

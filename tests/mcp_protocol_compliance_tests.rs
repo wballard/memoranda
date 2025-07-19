@@ -1,8 +1,8 @@
-/// MCP Protocol Compliance Tests
-/// 
-/// These tests verify that the MCP server implementation properly adheres to the
-/// Model Context Protocol (MCP) specification, including JSON-RPC 2.0 compliance,
-/// proper initialization handshake, tool schema validation, and error handling.
+//! MCP Protocol Compliance Tests
+//! 
+//! These tests verify that the MCP server implementation properly adheres to the
+//! Model Context Protocol (MCP) specification, including JSON-RPC 2.0 compliance,
+//! proper initialization handshake, tool schema validation, and error handling.
 
 use memoranda::mcp::server::McpServer;
 use memoranda::memo::MemoStore;
@@ -35,7 +35,7 @@ fn create_test_server() -> anyhow::Result<(McpServer, TempDir)> {
 /// Test JSON-RPC 2.0 Protocol Compliance
 #[tokio::test]
 async fn test_jsonrpc_protocol_compliance() -> anyhow::Result<()> {
-    let (server, _temp_dir) = create_test_server()?;
+    let (mut server, _temp_dir) = create_test_server()?;
     
     // Test initialize response format
     let initialize_msg = json!({
@@ -76,7 +76,7 @@ async fn test_jsonrpc_protocol_compliance() -> anyhow::Result<()> {
 /// Test MCP Initialization Protocol
 #[tokio::test]
 async fn test_mcp_initialization_protocol() -> anyhow::Result<()> {
-    let (server, _temp_dir) = create_test_server()?;
+    let (mut server, _temp_dir) = create_test_server()?;
     
     // Test initialization without being initialized
     let tools_list_msg = json!({
@@ -139,7 +139,7 @@ async fn test_mcp_initialization_protocol() -> anyhow::Result<()> {
 /// Test Tool Discovery and Schema Validation
 #[tokio::test]
 async fn test_tool_discovery_and_schema_validation() -> anyhow::Result<()> {
-    let (server, _temp_dir) = create_test_server()?;
+    let (mut server, _temp_dir) = create_test_server()?;
     
     // Initialize the server
     let initialize_msg = json!({
@@ -175,15 +175,13 @@ async fn test_tool_discovery_and_schema_validation() -> anyhow::Result<()> {
     assert_eq!(tools.len(), 7);
     
     // Verify each tool has proper schema
-    let expected_tools = vec![
-        "create_memo",
+    let expected_tools = ["create_memo",
         "update_memo", 
         "list_memos",
         "get_memo",
         "delete_memo",
         "search_memos",
-        "get_all_context",
-    ];
+        "get_all_context"];
     
     for tool in tools {
         let tool_obj = tool.as_object().unwrap();
@@ -232,7 +230,7 @@ async fn test_tool_discovery_and_schema_validation() -> anyhow::Result<()> {
 /// Test Error Handling According to MCP Spec
 #[tokio::test]
 async fn test_mcp_error_handling() -> anyhow::Result<()> {
-    let (server, _temp_dir) = create_test_server()?;
+    let (mut server, _temp_dir) = create_test_server()?;
     
     // Test parse error (invalid JSON)
     let invalid_json = r#"{"jsonrpc": "2.0", "id": 1, "method": "invalid"#;
@@ -289,7 +287,7 @@ async fn test_mcp_error_handling() -> anyhow::Result<()> {
 /// Test Tool Execution Protocol Compliance
 #[tokio::test]
 async fn test_tool_execution_protocol_compliance() -> anyhow::Result<()> {
-    let (server, _temp_dir) = create_test_server()?;
+    let (mut server, _temp_dir) = create_test_server()?;
     
     // Initialize the server
     let initialize_msg = json!({
@@ -364,7 +362,7 @@ async fn test_tool_execution_protocol_compliance() -> anyhow::Result<()> {
 /// Test Protocol Version Compliance
 #[tokio::test]
 async fn test_protocol_version_compliance() -> anyhow::Result<()> {
-    let (server, _temp_dir) = create_test_server()?;
+    let (mut server, _temp_dir) = create_test_server()?;
     
     let initialize_msg = json!({
         "jsonrpc": "2.0",
@@ -402,7 +400,7 @@ async fn test_protocol_version_compliance() -> anyhow::Result<()> {
     assert!(capabilities.get("tools").is_some());
     
     let tools_capability = capabilities.get("tools").unwrap();
-    assert_eq!(tools_capability.get("listChanged").unwrap().as_bool().unwrap(), true);
+    assert!(tools_capability.get("listChanged").unwrap().as_bool().unwrap());
     
     Ok(())
 }
@@ -410,7 +408,7 @@ async fn test_protocol_version_compliance() -> anyhow::Result<()> {
 /// Test Message Format Validation
 #[tokio::test]
 async fn test_message_format_validation() -> anyhow::Result<()> {
-    let (server, _temp_dir) = create_test_server()?;
+    let (mut server, _temp_dir) = create_test_server()?;
     
     // Test message without method
     let invalid_msg = json!({
@@ -444,7 +442,7 @@ async fn test_message_format_validation() -> anyhow::Result<()> {
 /// Test Concurrent Message Handling
 #[tokio::test]
 async fn test_concurrent_message_handling() -> anyhow::Result<()> {
-    let (server, _temp_dir) = create_test_server()?;
+    let (mut server, _temp_dir) = create_test_server()?;
     
     // Initialize the server
     let initialize_msg = json!({

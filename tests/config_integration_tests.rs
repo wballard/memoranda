@@ -193,32 +193,56 @@ fn test_settings_file_operations_with_nested_directory() {
 
 #[test]
 fn test_settings_file_operations_error_handling() {
+    use memoranda::MemorandaError;
     let settings = Settings::new().unwrap();
     
-    // Test saving to invalid path - use a path that definitely can't be written to
-    // on any system: a path that contains null bytes
+    // Test saving to a path with invalid characters (null bytes)
     let invalid_path = PathBuf::from("/root/\0invalid/cannot_write_here.json");
     let result = settings.save_to_file(&invalid_path);
     assert!(result.is_err(), "Should fail to save to invalid path with null bytes");
+    match result.unwrap_err() {
+        MemorandaError::Io(_) => {}, // Expected IO error
+        other => panic!("Expected IO error, got: {other:?}"),
+    }
     
-    // Test saving to a directory that doesn't exist and can't be created
-    // Use a path that tries to create a file inside a non-directory file
+    // Test saving to a path that tries to create a file inside a non-directory file
     let temp_file = tempfile::NamedTempFile::new().unwrap();
     let impossible_path = temp_file.path().join("cannot_create_dir_here").join("file.json");
     let result = settings.save_to_file(&impossible_path);
     assert!(result.is_err(), "Should fail to save to path inside a regular file");
+    match result.unwrap_err() {
+        MemorandaError::Io(io_err) => {
+            // Verify it's a meaningful IO error
+            assert!(!io_err.to_string().is_empty(), "IO error should have descriptive message");
+        },
+        other => panic!("Expected IO error, got: {other:?}"),
+    }
     
-    // Test loading from non-existent file
+    // Test loading from non-existent file (should return Ok with defaults)
     let non_existent_path = PathBuf::from("/definitely/does/not/exist/settings.json");
     let result = Settings::load_from_file(&non_existent_path);
-    // This should return Ok with default settings, not an error
     assert!(result.is_ok(), "Should return default settings for non-existent file");
+    let loaded_settings = result.unwrap();
+    let default_settings = Settings::default();
+    assert_eq!(loaded_settings.data_dir, default_settings.data_dir);
+    assert_eq!(loaded_settings.log_level, default_settings.log_level);
     
     // Test loading from a directory instead of a file
     let temp_dir = tempfile::TempDir::new().unwrap();
     let dir_path = temp_dir.path().to_path_buf();
     let result = Settings::load_from_file(&dir_path);
     assert!(result.is_err(), "Should fail to load from directory path");
+    match result.unwrap_err() {
+        MemorandaError::Io(io_err) => {
+            // Should be a specific error about reading from directory
+            let error_msg = io_err.to_string().to_lowercase();
+            assert!(error_msg.contains("directory") || error_msg.contains("is a directory") || 
+                   error_msg.contains("invalid") || error_msg.contains("21"), 
+                   "Error message should indicate directory issue: {}", error_msg);
+        },
+        MemorandaError::Json(_) => {}, // Also acceptable if it tries to parse directory listing as JSON
+        other => panic!("Expected IO or JSON error, got: {other:?}"),
+    }
 }
 
 #[test]
@@ -424,10 +448,10 @@ fn test_settings_error_message_quality() {
     };
     
     match settings.validate() {
-        Err(MemorandaError::Validation(msg)) => {
-            assert!(msg.contains("port"));
-            assert!(msg.contains("1024"));
-            assert!(msg.contains("80"));
+        Err(MemorandaError::Validation { message }) => {
+            assert!(message.contains("port"));
+            assert!(message.contains("1024"));
+            assert!(message.contains("80"));
         }
         _ => panic!("Expected validation error with descriptive message"),
     }
@@ -442,10 +466,10 @@ fn test_settings_error_message_quality() {
     };
     
     match settings.validate() {
-        Err(MemorandaError::Validation(msg)) => {
-            assert!(msg.contains("Invalid minimum Rust version"));
-            assert!(msg.contains("invalid"));
-            assert!(msg.contains("semver"));
+        Err(MemorandaError::Validation { message }) => {
+            assert!(message.contains("Invalid minimum Rust version"));
+            assert!(message.contains("invalid"));
+            assert!(message.contains("semver"));
         }
         _ => panic!("Expected validation error with descriptive message"),
     }
@@ -521,12 +545,11 @@ fn test_settings_advanced_error_scenarios() {
         };
         
         let result = settings.validate();
-        assert!(result.is_err(), "Version '{}' should be invalid", version);
+        assert!(result.is_err(), "Version '{version}' should be invalid");
         let error = result.unwrap_err();
         assert!(
             error.to_string().contains("Invalid minimum Rust version"),
-            "Error message should mention invalid Rust version for '{}'", 
-            version
+            "Error message should mention invalid Rust version for '{version}'"
         );
     }
     
@@ -569,7 +592,7 @@ fn test_settings_serialization_error_handling() {
     let path = temp_file.path().to_path_buf();
     
     // Test various malformed JSON scenarios
-    let malformed_json_cases = vec![
+    let malformed_json_cases = [
         "",                              // Empty file
         "{",                             // Unclosed brace
         "{ \"invalid\": }",              // Missing value
@@ -585,12 +608,12 @@ fn test_settings_serialization_error_handling() {
         let result = Settings::load_from_file(&path);
         if malformed_json.is_empty() {
             // Empty file should return default settings
-            assert!(result.is_ok(), "Case {}: Empty file should return defaults", i);
+            assert!(result.is_ok(), "Case {i}: Empty file should return defaults");
             let settings = result.unwrap();
             assert_eq!(settings.log_level, "info");
         } else {
             // All other malformed JSON should fail
-            assert!(result.is_err(), "Case {}: Malformed JSON '{}' should fail to parse", i, malformed_json);
+            assert!(result.is_err(), "Case {i}: Malformed JSON '{malformed_json}' should fail to parse");
         }
     }
 }
