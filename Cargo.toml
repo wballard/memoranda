@@ -52,6 +52,9 @@ colored = "2.0"
 # Random number generation for retry jitter
 fastrand = "2.0"
 
+# Caching
+moka = { version = "0.12", features = ["future"] }
+
 [dev-dependencies]
 # Testing utilities
 tempfile = "3.8"
@@ -70,6 +73,7 @@ mockall = "0.12"
 # Test fixtures and randomization
 fake = { version = "2.9", features = ["derive"] }
 # Async testing
+futures = "0.3"
 
 [[bench]]
 name = "memo_performance_benchmarks"
