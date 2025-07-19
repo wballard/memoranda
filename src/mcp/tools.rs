@@ -2,7 +2,7 @@ use serde_json::Value;
 use tracing::info;
 
 const MEMO_TITLE_MAX_LENGTH: u32 = 255;
-const MEMO_CONTENT_MAX_LENGTH: u32 = 1048576;
+const MEMO_CONTENT_MAX_LENGTH: u32 = 1_048_576;
 const SEARCH_QUERY_MAX_LENGTH: u32 = 1000;
 
 #[derive(Debug, Clone)]
@@ -63,33 +63,20 @@ impl McpTool {
                     "required": ["id", "content"]
                 })
             }
-            "list_memos" => {
+            "list_memos" | "get_all_context" => {
                 serde_json::json!({
                     "type": "object",
                     "properties": {},
                     "required": []
                 })
             }
-            "get_memo" => {
+            "get_memo" | "delete_memo" => {
                 serde_json::json!({
                     "type": "object",
                     "properties": {
                         "id": {
                             "type": "string",
-                            "description": "The ID of the memo to retrieve",
-                            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
-                        }
-                    },
-                    "required": ["id"]
-                })
-            }
-            "delete_memo" => {
-                serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "id": {
-                            "type": "string",
-                            "description": "The ID of the memo to delete",
+                            "description": "The ID of the memo",
                             "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
                         }
                     },
@@ -108,13 +95,6 @@ impl McpTool {
                         }
                     },
                     "required": ["query"]
-                })
-            }
-            "get_all_context" => {
-                serde_json::json!({
-                    "type": "object",
-                    "properties": {},
-                    "required": []
                 })
             }
             _ => {

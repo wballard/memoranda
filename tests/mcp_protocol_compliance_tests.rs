@@ -6,7 +6,7 @@
 
 use memoranda::mcp::server::McpServer;
 use memoranda::memo::MemoStore;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::fs;
 use tempfile::TempDir;
 
@@ -390,14 +390,12 @@ async fn test_tool_execution_protocol_compliance() -> anyhow::Result<()> {
     assert!(response.get("error").is_some());
     let error = response.get("error").unwrap();
     assert_eq!(error.get("code").unwrap().as_i64().unwrap(), -32000);
-    assert!(
-        error
-            .get("message")
-            .unwrap()
-            .as_str()
-            .unwrap()
-            .contains("Tool execution failed")
-    );
+    assert!(error
+        .get("message")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("Tool execution failed"));
 
     Ok(())
 }
@@ -448,13 +446,11 @@ async fn test_protocol_version_compliance() -> anyhow::Result<()> {
     assert!(capabilities.get("tools").is_some());
 
     let tools_capability = capabilities.get("tools").unwrap();
-    assert!(
-        tools_capability
-            .get("listChanged")
-            .unwrap()
-            .as_bool()
-            .unwrap()
-    );
+    assert!(tools_capability
+        .get("listChanged")
+        .unwrap()
+        .as_bool()
+        .unwrap());
 
     Ok(())
 }

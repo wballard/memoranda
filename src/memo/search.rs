@@ -44,6 +44,7 @@ pub struct SearchQuery {
 }
 
 impl SearchQuery {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             terms: Vec::new(),
@@ -58,6 +59,7 @@ impl SearchQuery {
         }
     }
 
+    #[must_use]
     pub fn with_terms(terms: Vec<String>) -> Self {
         Self {
             terms,
@@ -72,6 +74,7 @@ impl SearchQuery {
         }
     }
 
+    #[must_use]
     pub fn with_phrase(phrase: String) -> Self {
         Self {
             terms: Vec::new(),
@@ -86,6 +89,7 @@ impl SearchQuery {
         }
     }
 
+    #[must_use]
     pub fn with_tags(tags: Vec<String>) -> Self {
         Self {
             terms: Vec::new(),
@@ -100,6 +104,7 @@ impl SearchQuery {
         }
     }
 
+    #[must_use]
     pub fn with_boolean_query(boolean_query: SearchTerm) -> Self {
         Self {
             terms: Vec::new(),
@@ -248,6 +253,7 @@ pub struct MemoSearcher {
 }
 
 impl MemoSearcher {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             index: HashMap::new(),

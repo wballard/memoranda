@@ -5,7 +5,7 @@ use memoranda::config::Settings;
 use memoranda::error::{CliError, MemorandaError};
 use memoranda::logging;
 use memoranda::mcp::McpServer;
-use tracing::{Level, error, info, span, warn};
+use tracing::{error, info, span, warn, Level};
 
 #[derive(Parser)]
 #[command(name = "memoranda")]

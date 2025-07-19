@@ -35,6 +35,7 @@ impl Default for DoctorCommand {
 }
 
 impl DoctorCommand {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             verbose: false,
@@ -43,6 +44,7 @@ impl DoctorCommand {
         }
     }
 
+    #[must_use]
     pub fn with_options(verbose: bool, auto_fix: bool) -> Self {
         Self {
             verbose,
@@ -51,8 +53,19 @@ impl DoctorCommand {
         }
     }
 
+    /// Runs the system diagnostic checks and displays the results.
+    /// 
+    /// Performs various health checks on the system including Rust toolchain,
+    /// system dependencies, git repository, memoranda directory structure,
+    /// file permissions, memo formats, and MCP integration.
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if any automatic fix operations fail when `auto_fix` is enabled.
+    /// The function itself does not fail on diagnostic check failures - those are
+    /// reported but do not cause the function to return an error.
     pub async fn run(&self) -> Result<()> {
-        use colored::*;
+        use colored::Colorize;
 
         info!("Running doctor command");
         println!(
@@ -64,7 +77,7 @@ impl DoctorCommand {
         println!("{}", "=====================================".bright_cyan());
         println!();
 
-        let checks = self.get_diagnostic_checks();
+        let checks = Self::get_diagnostic_checks();
         let mut errors = 0;
         let mut warnings = 0;
 
@@ -150,7 +163,7 @@ impl DoctorCommand {
         Ok(())
     }
 
-    fn get_diagnostic_checks(&self) -> Vec<DiagnosticCheck> {
+    fn get_diagnostic_checks() -> Vec<DiagnosticCheck> {
         vec![
             DiagnosticCheck {
                 name: "Rust toolchain".to_string(),
@@ -369,11 +382,8 @@ impl DoctorCommand {
         use crate::mcp::McpServer;
 
         // Check 1: Server initialization
-        let server = match McpServer::new("memoranda_doctor_test".to_string()) {
-            Ok(server) => server,
-            Err(e) => {
-                return DiagnosticResult::Error(format!("Failed to initialize MCP server: {e}"));
-            }
+        let Ok(server) = McpServer::new("memoranda_doctor_test".to_string()) else {
+            return DiagnosticResult::Error("Failed to initialize MCP server".to_string());
         };
 
         // Check 2: Tool registration
@@ -449,6 +459,13 @@ impl DoctorCommand {
         }
     }
 
+    /// Fixes the .memoranda directory by creating it if missing or removing it if it's a file.
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - Cannot remove existing .memoranda file
+    /// - Cannot create .memoranda directory due to permissions or filesystem issues
     fn fix_memoranda_directory(&self) -> Result<()> {
         let memoranda_path = Path::new(".memoranda");
 
@@ -463,6 +480,13 @@ impl DoctorCommand {
         Ok(())
     }
 
+    /// Fixes invalid memo file formats by renaming files with non-ULID names.
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - Cannot read the .memoranda directory
+    /// - File operations (rename, validation) fail due to permissions or I/O issues
     fn fix_memo_formats(&self) -> Result<()> {
         let memoranda_path = Path::new(".memoranda");
 
@@ -481,8 +505,8 @@ impl DoctorCommand {
                     {
                         if let Some(file_name) = path.file_stem().and_then(|s| s.to_str()) {
                             // Try to fix invalid filename format
-                            if !self.is_valid_ulid_filename(file_name) {
-                                if let Ok(fixed_path) = self.fix_memo_filename(&path) {
+                            if !Self::is_valid_ulid_filename(file_name) {
+                                if let Ok(fixed_path) = Self::fix_memo_filename(&path) {
                                     println!(
                                         "   📝 Renamed {} to {}",
                                         path.display(),
@@ -505,7 +529,14 @@ impl DoctorCommand {
         Ok(())
     }
 
-    fn fix_memo_filename(&self, path: &Path) -> Result<std::path::PathBuf> {
+    /// Fixes a memo filename by renaming it to use a ULID-based name.
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - Cannot rename the file due to permissions, I/O issues, or filesystem constraints
+    /// - Target filename already exists
+    fn fix_memo_filename(path: &Path) -> Result<std::path::PathBuf> {
         // Generate a new ULID-based filename
         let ulid = ulid::Ulid::new();
         let new_filename = format!("{ulid}.json");
@@ -517,10 +548,21 @@ impl DoctorCommand {
         Ok(new_path)
     }
 
+    /// Validates a memo file for proper format, naming conventions, and content integrity.
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - Filename is not ULID-based format
+    /// - Cannot read file due to permissions or I/O issues  
+    /// - File contains invalid UTF-8
+    /// - File contains invalid JSON
+    /// - File size exceeds configured maximum
+    /// - File content is empty
     fn validate_memo_file_enhanced(&self, path: &Path) -> Result<()> {
         // 1. Check file naming conventions (should be ULID-based)
         if let Some(file_name) = path.file_stem().and_then(|s| s.to_str()) {
-            if !self.is_valid_ulid_filename(file_name) {
+            if !Self::is_valid_ulid_filename(file_name) {
                 return Err(anyhow::anyhow!(
                     "Invalid filename format - should be ULID-based"
                 ));
@@ -529,9 +571,8 @@ impl DoctorCommand {
 
         // 2. Check UTF-8 encoding by reading as bytes first
         let content_bytes = fs::read(path)?;
-        let content = match String::from_utf8(content_bytes) {
-            Ok(s) => s,
-            Err(_) => return Err(anyhow::anyhow!("File is not valid UTF-8")),
+        let Ok(content) = String::from_utf8(content_bytes) else {
+            return Err(anyhow::anyhow!("File is not valid UTF-8"));
         };
 
         // 3. Check if file is valid JSON
@@ -551,7 +592,7 @@ impl DoctorCommand {
         }
 
         // 5. Check content integrity (reasonable size limits)
-        if content.len() > self.settings.max_memo_file_size as usize {
+        if content.len() > usize::try_from(self.settings.max_memo_file_size).unwrap_or(usize::MAX) {
             return Err(anyhow::anyhow!(
                 "File size too large (>{}MB)",
                 self.settings.max_memo_file_size / 1_000_000
@@ -565,7 +606,7 @@ impl DoctorCommand {
         Ok(())
     }
 
-    fn is_valid_ulid_filename(&self, filename: &str) -> bool {
+    fn is_valid_ulid_filename(filename: &str) -> bool {
         // ULID format: 26 characters, case-insensitive alphanumeric
         // Pattern: [0-9A-HJKMNP-TV-Z]{26}
         use regex::Regex;

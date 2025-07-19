@@ -253,34 +253,28 @@ mod unit_tests {
             .execute_tool("create_memo", json!({"content": "test"}))
             .await;
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Missing required parameter: title")
-        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Missing required parameter: title"));
 
         // Test create_memo without content
         let result = server
             .execute_tool("create_memo", json!({"title": "test"}))
             .await;
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Missing required parameter: content")
-        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Missing required parameter: content"));
 
         // Test get_memo without id
         let result = server.execute_tool("get_memo", json!({})).await;
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Missing required parameter: id")
-        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Missing required parameter: id"));
 
         Ok(())
     }
@@ -294,12 +288,10 @@ mod unit_tests {
             .execute_tool("get_memo", json!({"id": "invalid-id"}))
             .await;
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Invalid memo ID format")
-        );
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid memo ID format"));
 
         Ok(())
     }

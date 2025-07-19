@@ -49,17 +49,19 @@ pub struct CacheStats {
 
 #[derive(Debug)]
 pub struct MemoCache {
-    memo_cache: Cache<MemoId, Arc<Memo>>,
+    cache: Cache<MemoId, Arc<Memo>>,
     metadata_cache: Cache<PathBuf, Arc<MemoMetadata>>,
     stats: Arc<RwLock<CacheStats>>,
     config: CacheConfig,
 }
 
 impl MemoCache {
+    #[must_use]
     pub fn new() -> Self {
         Self::with_cache_config(CacheConfig::default())
     }
 
+    #[must_use]
     pub fn with_cache_config(config: CacheConfig) -> Self {
         info!(
             memo_cache_size = config.memo_cache_size,
@@ -81,7 +83,7 @@ impl MemoCache {
             .build();
 
         Self {
-            memo_cache,
+            cache: memo_cache,
             metadata_cache,
             stats: Arc::new(RwLock::new(CacheStats {
                 memo_hits: 0,
@@ -96,6 +98,7 @@ impl MemoCache {
     }
 
     /// Create cache with legacy parameters (deprecated, use with_cache_config)
+    #[must_use]
     pub fn with_config(max_capacity: u64, ttl_seconds: u64) -> Self {
         let config = CacheConfig {
             memo_cache_size: max_capacity,
@@ -108,7 +111,7 @@ impl MemoCache {
 
     #[instrument(skip(self), fields(memo_id = %id))]
     pub async fn get_memo(&self, id: &MemoId) -> Option<Arc<Memo>> {
-        match self.memo_cache.get(id).await {
+        match self.cache.get(id).await {
             Some(memo) => {
                 debug!("Cache hit for memo {}", id);
                 self.increment_memo_hits().await;
@@ -126,14 +129,14 @@ impl MemoCache {
     pub async fn put_memo(&self, memo: Memo) {
         debug!("Caching memo {}", memo.id);
         let memo_id = memo.id;
-        self.memo_cache.insert(memo_id, Arc::new(memo)).await;
+        self.cache.insert(memo_id, Arc::new(memo)).await;
         self.update_memo_cache_size().await;
     }
 
     #[instrument(skip(self), fields(memo_id = %id))]
     pub async fn remove_memo(&self, id: &MemoId) {
         debug!("Removing memo {} from cache", id);
-        self.memo_cache.remove(id).await;
+        self.cache.remove(id).await;
         self.update_memo_cache_size().await;
     }
 
@@ -171,17 +174,18 @@ impl MemoCache {
     #[instrument(skip(self), fields(memo_id = %id))]
     pub async fn invalidate_memo(&self, id: &MemoId) {
         warn!("Invalidating memo {} from cache", id);
-        self.memo_cache.invalidate(id).await;
+        self.cache.invalidate(id).await;
         self.update_memo_cache_size().await;
     }
 
     #[instrument(skip(self))]
     pub async fn invalidate_all(&self) {
         warn!("Invalidating entire cache");
-        self.memo_cache.invalidate_all();
+        self.cache.invalidate_all();
         self.metadata_cache.invalidate_all();
         self.reset_stats().await;
     }
+
 
     pub async fn get_stats(&self) -> CacheStats {
         self.stats.read().await.clone()
@@ -237,7 +241,7 @@ impl MemoCache {
     }
 
     async fn update_memo_cache_size(&self) {
-        let size = self.memo_cache.entry_count();
+        let size = self.cache.entry_count();
         self.stats.write().await.memo_cache_size = size;
     }
 

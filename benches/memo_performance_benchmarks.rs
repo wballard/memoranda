@@ -4,7 +4,7 @@
 //! including large collection handling, search performance, and memory usage
 //! to ensure the system can handle production workloads efficiently.
 
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use memoranda::memo::{Memo, MemoId, MemoSearcher, MemoStore, SearchQuery, SearchResult};
 use std::collections::HashMap;
 use std::fs;

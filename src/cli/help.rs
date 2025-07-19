@@ -4,6 +4,7 @@ use tracing::info;
 pub struct HelpCommand;
 
 impl HelpCommand {
+    #[must_use]
     pub fn new() -> Self {
         Self
     }

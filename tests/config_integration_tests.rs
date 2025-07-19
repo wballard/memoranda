@@ -385,8 +385,8 @@ fn test_settings_validation_with_realistic_scenarios() {
 
 #[test]
 fn test_settings_concurrent_file_operations() {
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
     use std::thread;
 
     let temp_dir = TempDir::new().unwrap();

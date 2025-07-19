@@ -2,16 +2,15 @@ use anyhow::{Context, Result};
 use std::io::Write;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::signal;
-use tracing::{Level, debug, error, info, span, warn};
+use tracing::{debug, error, info, span, warn, Level};
 use ulid::Ulid;
 
 use super::tools::McpTool;
 use crate::error::McpError;
 use crate::memo::MemoStore;
-use crate::utils::{RetryConfig, retry_with_backoff_sync};
+use crate::utils::{retry_with_backoff_sync, RetryConfig};
 
 const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
-const CONTEXT_SEPARATOR: &str = "\n\n---\n\n";
 
 pub struct McpServer {
     pub name: String,
@@ -468,6 +467,117 @@ impl McpServer {
         }
     }
 
+    /// Extracts a string parameter from the arguments JSON.
+    fn extract_string_param<'a>(arguments: &'a serde_json::Value, param_name: &str) -> Result<&'a str> {
+        arguments
+            .get(param_name)
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: {}", param_name))
+    }
+
+    /// Parses a string ID into a MemoId.
+    fn parse_memo_id(id_str: &str) -> Result<crate::memo::MemoId> {
+        let ulid = id_str
+            .parse::<ulid::Ulid>()
+            .map_err(|_| anyhow::anyhow!("Invalid memo ID format"))?;
+        Ok(crate::memo::MemoId::from_ulid(ulid))
+    }
+
+    /// Handles server status tool execution.
+    async fn execute_server_status(&self) -> Result<String> {
+        Ok(serde_json::to_string_pretty(&self.get_server_status())?)
+    }
+
+    /// Handles retry memo store tool execution.
+    async fn execute_retry_memo_store(&mut self) -> Result<String> {
+        let success = self.retry_memo_store_initialization()?;
+        Ok(serde_json::to_string_pretty(&serde_json::json!({
+            "success": success,
+            "message": if success {
+                "Memo store successfully reinitialized - full functionality restored"
+            } else {
+                "Failed to reinitialize memo store - continuing with limited functionality"
+            }
+        }))?)
+    }
+
+    /// Handles create memo tool execution.
+    async fn execute_create_memo(memo_store: &crate::memo::MemoStore, arguments: &serde_json::Value) -> Result<String> {
+        let title = Self::extract_string_param(arguments, "title")?;
+        let content = Self::extract_string_param(arguments, "content")?;
+
+        let memo = memo_store.create_memo(title.to_string(), content.to_string())?;
+        Ok(serde_json::to_string_pretty(&memo)?)
+    }
+
+    /// Handles update memo tool execution.
+    async fn execute_update_memo(memo_store: &crate::memo::MemoStore, arguments: &serde_json::Value) -> Result<String> {
+        let id_str = Self::extract_string_param(arguments, "id")?;
+        let content = Self::extract_string_param(arguments, "content")?;
+
+        let memo_id = Self::parse_memo_id(id_str)?;
+        let memo = memo_store.update_memo(&memo_id, content.to_string())?;
+        Ok(serde_json::to_string_pretty(&memo)?)
+    }
+
+    /// Handles list memos tool execution.
+    async fn execute_list_memos(memo_store: &crate::memo::MemoStore) -> Result<String> {
+        let memos = memo_store.list_memos()?;
+        Ok(serde_json::to_string_pretty(&memos)?)
+    }
+
+    /// Handles get memo tool execution.
+    async fn execute_get_memo(memo_store: &crate::memo::MemoStore, arguments: &serde_json::Value) -> Result<String> {
+        let id_str = Self::extract_string_param(arguments, "id")?;
+        let memo_id = Self::parse_memo_id(id_str)?;
+
+        let memo = memo_store.get_memo(&memo_id)?
+            .ok_or_else(|| anyhow::anyhow!("Memo not found with ID: {}", memo_id))?;
+        Ok(serde_json::to_string_pretty(&memo)?)
+    }
+
+    /// Handles delete memo tool execution.
+    async fn execute_delete_memo(memo_store: &crate::memo::MemoStore, arguments: &serde_json::Value) -> Result<String> {
+        let id_str = Self::extract_string_param(arguments, "id")?;
+        let memo_id = Self::parse_memo_id(id_str)?;
+
+        memo_store.delete_memo(&memo_id)?;
+        Ok(serde_json::to_string_pretty(&serde_json::json!({
+            "success": true,
+            "message": "Memo deleted successfully"
+        }))?)
+    }
+
+    /// Handles search memos tool execution.
+    async fn execute_search_memos(memo_store: &crate::memo::MemoStore, arguments: &serde_json::Value) -> Result<String> {
+        let query = Self::extract_string_param(arguments, "query")?;
+
+        // Simple search implementation like in the original function
+        let memos = memo_store.list_memos()?;
+        let matching_memos: Vec<_> = memos
+            .into_iter()
+            .filter(|memo| {
+                memo.title.to_lowercase().contains(&query.to_lowercase())
+                    || memo.content.to_lowercase().contains(&query.to_lowercase())
+            })
+            .collect();
+
+        Ok(serde_json::to_string_pretty(&matching_memos)?)
+    }
+
+    /// Handles get all context tool execution.
+    async fn execute_get_all_context(memo_store: &crate::memo::MemoStore) -> Result<String> {
+        let all_memos = memo_store.list_memos()?;
+        
+        let context = all_memos
+            .into_iter()
+            .map(|memo| format!("# {}\n{}", memo.title, memo.content))
+            .collect::<Vec<_>>()
+            .join("\n\n---\n\n");
+        
+        Ok(context)
+    }
+
     pub async fn execute_tool(
         &mut self,
         tool_name: &str,
@@ -477,136 +587,27 @@ impl McpServer {
 
         // Handle limited functionality tools first
         match tool_name {
-            "server_status" => {
-                return Ok(serde_json::to_string_pretty(&self.get_server_status())?);
-            }
-
-            "retry_memo_store" => {
-                let success = self.retry_memo_store_initialization()?;
-                return Ok(serde_json::to_string_pretty(&serde_json::json!({
-                    "success": success,
-                    "message": if success {
-                        "Memo store successfully reinitialized - full functionality restored"
-                    } else {
-                        "Failed to reinitialize memo store - continuing with limited functionality"
-                    }
-                }))?);
-            }
-
+            "server_status" => return self.execute_server_status().await,
+            "retry_memo_store" => return self.execute_retry_memo_store().await,
             _ => {}
         }
 
         // Check if memo store is available for memo operations
-        let memo_store = match &self.memo_store {
-            Some(store) => store,
-            None => {
-                return Err(anyhow::anyhow!(
-                    "Memo store is not available. Use 'retry_memo_store' to attempt reinitialization or 'server_status' to check server status."
-                ));
-            }
+        let Some(memo_store) = &self.memo_store else {
+            return Err(anyhow::anyhow!(
+                "Memo store is not available. Use 'retry_memo_store' to attempt reinitialization or 'server_status' to check server status."
+            ));
         };
 
+        // Route to appropriate tool handler
         match tool_name {
-            "create_memo" => {
-                let title = arguments
-                    .get("title")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("Missing required parameter: title"))?;
-                let content = arguments
-                    .get("content")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("Missing required parameter: content"))?;
-
-                let memo = memo_store.create_memo(title.to_string(), content.to_string())?;
-                Ok(serde_json::to_string_pretty(&memo)?)
-            }
-
-            "update_memo" => {
-                let id_str = arguments
-                    .get("id")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("Missing required parameter: id"))?;
-                let content = arguments
-                    .get("content")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("Missing required parameter: content"))?;
-
-                let memo_id = id_str
-                    .parse::<ulid::Ulid>()
-                    .map_err(|_| anyhow::anyhow!("Invalid memo ID format"))?;
-                let memo_id = crate::memo::MemoId::from_ulid(memo_id);
-
-                let memo = memo_store.update_memo(&memo_id, content.to_string())?;
-                Ok(serde_json::to_string_pretty(&memo)?)
-            }
-
-            "list_memos" => {
-                let memos = memo_store.list_memos()?;
-                Ok(serde_json::to_string_pretty(&memos)?)
-            }
-
-            "get_memo" => {
-                let id_str = arguments
-                    .get("id")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("Missing required parameter: id"))?;
-
-                let memo_id = id_str
-                    .parse::<ulid::Ulid>()
-                    .map_err(|_| anyhow::anyhow!("Invalid memo ID format"))?;
-                let memo_id = crate::memo::MemoId::from_ulid(memo_id);
-
-                match memo_store.get_memo(&memo_id)? {
-                    Some(memo) => Ok(serde_json::to_string_pretty(&memo)?),
-                    None => Err(anyhow::anyhow!("Memo not found: {}", id_str)),
-                }
-            }
-
-            "delete_memo" => {
-                let id_str = arguments
-                    .get("id")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("Missing required parameter: id"))?;
-
-                let memo_id = id_str
-                    .parse::<ulid::Ulid>()
-                    .map_err(|_| anyhow::anyhow!("Invalid memo ID format"))?;
-                let memo_id = crate::memo::MemoId::from_ulid(memo_id);
-
-                memo_store.delete_memo(&memo_id)?;
-                Ok(format!("Memo {id_str} deleted successfully"))
-            }
-
-            "search_memos" => {
-                let query = arguments
-                    .get("query")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("Missing required parameter: query"))?;
-
-                let memos = memo_store.list_memos()?;
-                let matching_memos: Vec<_> = memos
-                    .into_iter()
-                    .filter(|memo| {
-                        memo.title.to_lowercase().contains(&query.to_lowercase())
-                            || memo.content.to_lowercase().contains(&query.to_lowercase())
-                    })
-                    .collect();
-
-                Ok(serde_json::to_string_pretty(&matching_memos)?)
-            }
-
-            "get_all_context" => {
-                let memos = memo_store.list_memos()?;
-                let mut context = String::new();
-
-                for memo in memos {
-                    context.push_str(&format!("# {}\n\n{}", memo.title, memo.content));
-                    context.push_str(CONTEXT_SEPARATOR);
-                }
-
-                Ok(context)
-            }
-
+            "create_memo" => Self::execute_create_memo(memo_store, &arguments).await,
+            "update_memo" => Self::execute_update_memo(memo_store, &arguments).await,
+            "list_memos" => Self::execute_list_memos(memo_store).await,
+            "get_memo" => Self::execute_get_memo(memo_store, &arguments).await,
+            "delete_memo" => Self::execute_delete_memo(memo_store, &arguments).await,
+            "search_memos" => Self::execute_search_memos(memo_store, &arguments).await,
+            "get_all_context" => Self::execute_get_all_context(memo_store).await,
             _ => Err(anyhow::anyhow!("Unknown tool: {}", tool_name)),
         }
     }

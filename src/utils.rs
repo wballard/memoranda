@@ -235,8 +235,8 @@ where
 mod tests {
     use super::*;
     use std::sync::{
-        Arc,
         atomic::{AtomicUsize, Ordering},
+        Arc,
     };
 
     #[test]

@@ -11,7 +11,7 @@ use walkdir::WalkDir;
 use super::cache::{MemoCache, MemoMetadata};
 use super::models::{Memo, MemoId};
 use super::search::{MemoSearcher, SearchQuery, SearchResult};
-use crate::utils::{RetryConfig, retry_with_backoff_sync};
+use crate::utils::{retry_with_backoff_sync, RetryConfig};
 
 #[derive(Error, Debug)]
 pub enum MemoStoreError {
@@ -455,6 +455,8 @@ impl MemoStore {
                 RetryConfig::for_file_io(),
                 "delete_memo_file",
             )?;
+
+            // TODO: Remove from cache - need to handle async cache operations from sync context
         }
         self.mark_index_dirty();
 

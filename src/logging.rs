@@ -1,10 +1,10 @@
 use std::env;
 use std::fs::File;
 use tracing_subscriber::{
-    EnvFilter, Layer,
     fmt::{self, format::FmtSpan},
     layer::SubscriberExt,
     util::SubscriberInitExt,
+    EnvFilter, Layer,
 };
 
 use crate::error::{MemorandaError, Result};
