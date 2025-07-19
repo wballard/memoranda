@@ -9,7 +9,7 @@ use walkdir::WalkDir;
 
 use super::models::{Memo, MemoId};
 use super::search::{MemoSearcher, SearchQuery, SearchResult};
-use crate::utils::{retry_with_backoff_sync, RetryConfig};
+use crate::utils::{RetryConfig, retry_with_backoff_sync};
 
 #[derive(Error, Debug)]
 pub enum MemoStoreError {
@@ -188,7 +188,7 @@ impl MemoStore {
 
     fn extract_memo_id_from_file(&self, file_path: &Path) -> Result<Option<MemoId>> {
         let file_path_clone = file_path.to_path_buf();
-        
+
         // Retry file read operation with exponential backoff
         let content = retry_with_backoff_sync(
             || fs::read_to_string(&file_path_clone).map_err(anyhow::Error::from),
@@ -349,23 +349,18 @@ impl MemoStore {
 
         // Write to temporary file with retry logic
         retry_with_backoff_sync(
-            || {
-                fs::write(&temp_file_path_clone, &file_content_clone)
-                    .map_err(anyhow::Error::from)
-            },
+            || fs::write(&temp_file_path_clone, &file_content_clone).map_err(anyhow::Error::from),
             RetryConfig::for_file_io(),
             "write_memo_temp_file",
         )?;
 
         // Atomically rename temporary file to final destination with retry
         retry_with_backoff_sync(
-            || {
-                fs::rename(&temp_file_path, &file_path_clone)
-                    .map_err(anyhow::Error::from)
-            },
+            || fs::rename(&temp_file_path, &file_path_clone).map_err(anyhow::Error::from),
             RetryConfig::for_file_io(),
             "rename_memo_file",
-        ).inspect_err(|_| {
+        )
+        .inspect_err(|_| {
             // Clean up temporary file on failure
             let _ = fs::remove_file(&temp_file_path);
         })?;

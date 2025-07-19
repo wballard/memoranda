@@ -2,13 +2,13 @@ use anyhow::{Context, Result};
 use std::io::Write;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::signal;
-use tracing::{debug, error, info, warn, span, Level};
+use tracing::{Level, debug, error, info, span, warn};
 use ulid::Ulid;
 
 use super::tools::McpTool;
 use crate::error::McpError;
 use crate::memo::MemoStore;
-use crate::utils::{retry_with_backoff_sync, RetryConfig};
+use crate::utils::{RetryConfig, retry_with_backoff_sync};
 
 const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
 const CONTEXT_SEPARATOR: &str = "\n\n---\n\n";
@@ -23,10 +23,10 @@ impl McpServer {
     pub fn new(name: String) -> Result<Self> {
         let _span = span!(Level::INFO, "mcp_server_new", server_name = %name).entered();
         info!(server_name = %name, "Creating MCP server");
-        
+
         // Try to initialize memo store with retry mechanism
         let memo_store = Self::try_initialize_memo_store();
-        
+
         let tools = if memo_store.is_some() {
             // Full functionality when memo store is available
             vec![
@@ -76,7 +76,7 @@ impl McpServer {
             memo_store_available = memo_store.is_some(),
             "MCP server initialized"
         );
-        
+
         Ok(Self {
             name,
             memo_store,
@@ -112,10 +112,10 @@ impl McpServer {
         }
 
         info!("Attempting to reinitialize memo store");
-        
+
         if let Some(store) = Self::try_initialize_memo_store() {
             self.memo_store = Some(store);
-            
+
             // Update tools to full functionality
             self.tools = vec![
                 McpTool::new(
@@ -144,7 +144,7 @@ impl McpServer {
                     "Combine all memos for LLM context".to_string(),
                 ),
             ];
-            
+
             info!("Memo store successfully reinitialized - full functionality restored");
             Ok(true)
         } else {
@@ -175,10 +175,14 @@ impl McpServer {
         // Setup signal handling for graceful shutdown
         let mut sigint = signal::unix::signal(signal::unix::SignalKind::interrupt())
             .context("Failed to setup SIGINT handler")
-            .map_err(|e| McpError::server_initialization_failed(format!("Signal handling setup failed: {e}")))?;
+            .map_err(|e| {
+                McpError::server_initialization_failed(format!("Signal handling setup failed: {e}"))
+            })?;
         let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
             .context("Failed to setup SIGTERM handler")
-            .map_err(|e| McpError::server_initialization_failed(format!("Signal handling setup failed: {e}")))?;
+            .map_err(|e| {
+                McpError::server_initialization_failed(format!("Signal handling setup failed: {e}"))
+            })?;
 
         let stdin = tokio::io::stdin();
         let mut reader = BufReader::new(stdin);
@@ -223,11 +227,11 @@ impl McpServer {
 
                             message_count += 1;
                             let message_id = Ulid::new();
-                            let _msg_span = span!(Level::DEBUG, "mcp_message", 
-                                message_id = %message_id, 
+                            let _msg_span = span!(Level::DEBUG, "mcp_message",
+                                message_id = %message_id,
                                 message_count = message_count
                             ).entered();
-                            
+
                             debug!(message_id = %message_id, raw_message = %line, "Received MCP message");
 
                             // Parse JSON-RPC message with better error handling
@@ -236,9 +240,9 @@ impl McpServer {
                                     let start_time = std::time::Instant::now();
                                     let response = self.handle_message_internal(message, &mut initialized).await;
                                     let duration = start_time.elapsed();
-                                    
+
                                     debug!(message_id = %message_id, duration_ms = duration.as_millis(), "Message processing completed");
-                                    
+
                                     if let Some(response) = response {
                                         if let Err(e) = writeln!(stdout, "{response}") {
                                             error!(message_id = %message_id, error = %e, "Failed to write response to stdout");
@@ -476,7 +480,7 @@ impl McpServer {
             "server_status" => {
                 return Ok(serde_json::to_string_pretty(&self.get_server_status())?);
             }
-            
+
             "retry_memo_store" => {
                 let success = self.retry_memo_store_initialization()?;
                 return Ok(serde_json::to_string_pretty(&serde_json::json!({
@@ -488,7 +492,7 @@ impl McpServer {
                     }
                 }))?);
             }
-            
+
             _ => {}
         }
 
@@ -513,8 +517,7 @@ impl McpServer {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing required parameter: content"))?;
 
-                let memo = memo_store
-                    .create_memo(title.to_string(), content.to_string())?;
+                let memo = memo_store.create_memo(title.to_string(), content.to_string())?;
                 Ok(serde_json::to_string_pretty(&memo)?)
             }
 

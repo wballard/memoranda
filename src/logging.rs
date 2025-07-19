@@ -1,11 +1,10 @@
 use std::env;
 use std::fs::File;
 use tracing_subscriber::{
+    EnvFilter, Layer,
     fmt::{self, format::FmtSpan},
     layer::SubscriberExt,
     util::SubscriberInitExt,
-    EnvFilter,
-    Layer,
 };
 
 use crate::error::{MemorandaError, Result};
@@ -140,19 +139,16 @@ pub fn init_logging(config: &LoggingConfig) -> Result<()> {
     if let Some(file_path) = &config.file_path {
         // Log to file
         let file = File::create(file_path).map_err(|e| {
-            MemorandaError::config_with_source(
-                format!("Failed to create log file: {file_path}"),
-                e,
-            )
+            MemorandaError::config_with_source(format!("Failed to create log file: {file_path}"), e)
         })?;
-        
+
         let file_layer = fmt::layer()
             .with_writer(file)
             .with_target(true)
             .with_file(config.include_location)
             .with_line_number(config.include_location)
             .with_ansi(false); // No colors for file output
-        
+
         tracing_subscriber::registry()
             .with(env_filter)
             .with(file_layer)
@@ -205,6 +201,60 @@ pub fn init_logging_from_env() -> Result<()> {
 mod tests {
     use super::*;
     use std::env;
+    use std::collections::HashMap;
+
+    /// Safe environment variable management for tests
+    struct TestEnvironment {
+        original_values: HashMap<String, Option<String>>,
+    }
+
+    impl TestEnvironment {
+        fn new() -> Self {
+            Self {
+                original_values: HashMap::new(),
+            }
+        }
+
+        fn set_var(&mut self, key: &str, value: &str) {
+            // Store the original value before changing it
+            if !self.original_values.contains_key(key) {
+                self.original_values.insert(key.to_string(), env::var(key).ok());
+            }
+            // SAFETY: Environment variable manipulation is encapsulated in a safe abstraction
+            // that ensures proper cleanup via Drop trait, preventing test isolation issues.
+            unsafe {
+                env::set_var(key, value);
+            }
+        }
+
+        fn remove_var(&mut self, key: &str) {
+            // Store the original value before removing it
+            if !self.original_values.contains_key(key) {
+                self.original_values.insert(key.to_string(), env::var(key).ok());
+            }
+            // SAFETY: Environment variable manipulation is encapsulated in a safe abstraction
+            // that ensures proper cleanup via Drop trait, preventing test isolation issues.
+            unsafe {
+                env::remove_var(key);
+            }
+        }
+    }
+
+    impl Drop for TestEnvironment {
+        fn drop(&mut self) {
+            // Restore all environment variables to their original state
+            // SAFETY: This cleanup operation is necessary for test isolation
+            // and is safe because it's restoring the original state.
+            unsafe {
+                for (key, original_value) in &self.original_values {
+                    match original_value {
+                        Some(value) => env::set_var(key, value),
+                        None => env::remove_var(key),
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn test_default_config() {
@@ -219,14 +269,14 @@ mod tests {
 
     #[test]
     fn test_config_from_env() {
-        // Set environment variables
-        unsafe {
-            env::set_var("MEMORANDA_LOG_LEVEL", "debug");
-            env::set_var("MEMORANDA_LOG_JSON", "true");
-            env::set_var("MEMORANDA_LOG_LOCATION", "true");
-            env::set_var("MEMORANDA_LOG_SPANS", "false");
-            env::set_var("MEMORANDA_LOG_COLORS", "false");
-        }
+        let mut test_env = TestEnvironment::new();
+        
+        // Set environment variables safely
+        test_env.set_var("MEMORANDA_LOG_LEVEL", "debug");
+        test_env.set_var("MEMORANDA_LOG_JSON", "true");
+        test_env.set_var("MEMORANDA_LOG_LOCATION", "true");
+        test_env.set_var("MEMORANDA_LOG_SPANS", "false");
+        test_env.set_var("MEMORANDA_LOG_COLORS", "false");
 
         let config = LoggingConfig::from_env().unwrap();
         assert_eq!(config.level, "debug");
@@ -235,25 +285,18 @@ mod tests {
         assert!(!config.include_spans);
         assert!(!config.use_colors);
 
-        // Clean up
-        unsafe {
-            env::remove_var("MEMORANDA_LOG_LEVEL");
-            env::remove_var("MEMORANDA_LOG_JSON");
-            env::remove_var("MEMORANDA_LOG_LOCATION");
-            env::remove_var("MEMORANDA_LOG_SPANS");
-            env::remove_var("MEMORANDA_LOG_COLORS");
-        }
+        // Environment variables are automatically restored when test_env is dropped
     }
 
     #[test]
     fn test_config_validation() {
         // Valid level
-        let mut config = LoggingConfig { 
-            level: "debug".to_string(), 
-            ..Default::default() 
+        let mut config = LoggingConfig {
+            level: "debug".to_string(),
+            ..Default::default()
         };
         assert!(config.validate().is_ok());
-        
+
         // Invalid level
         config.level = "invalid".to_string();
         assert!(config.validate().is_err());
@@ -271,18 +314,15 @@ mod tests {
 
     #[test]
     fn test_rust_log_fallback() {
-        // Test that RUST_LOG is used as fallback
-        unsafe {
-            env::set_var("RUST_LOG", "warn");
-            env::remove_var("MEMORANDA_LOG_LEVEL");
-        }
+        let mut test_env = TestEnvironment::new();
         
+        // Test that RUST_LOG is used as fallback
+        test_env.set_var("RUST_LOG", "warn");
+        test_env.remove_var("MEMORANDA_LOG_LEVEL");
+
         let config = LoggingConfig::from_env().unwrap();
         assert_eq!(config.level, "warn");
-        
-        // Clean up
-        unsafe {
-            env::remove_var("RUST_LOG");
-        }
+
+        // Environment variables are automatically restored when test_env is dropped
     }
 }

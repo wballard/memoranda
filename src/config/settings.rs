@@ -11,7 +11,12 @@ const DEFAULT_MINIMUM_RUST_VERSION: &str = "1.70.0";
 const DEFAULT_MAX_MEMO_FILE_SIZE: u64 = 1_000_000; // 1MB
 
 // Validation constants
+/// Minimum valid port number for MCP server.
+/// Ports below 1024 are privileged ports reserved for system services on Unix-like systems.
+/// User applications should use ports 1024 and above to avoid permission conflicts.
 const MIN_VALID_PORT: u16 = 1024;
+/// Minimum memo file size in bytes.
+/// Files must be at least 1 byte to be considered valid memo files.
 const MIN_MEMO_FILE_SIZE: u64 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,14 +57,12 @@ impl Settings {
         }
 
         if self.log_level.is_empty() {
-            return Err(MemorandaError::validation(
-                "Log level cannot be empty"
-            ));
+            return Err(MemorandaError::validation("Log level cannot be empty"));
         }
 
         if self.minimum_rust_version.is_empty() {
             return Err(MemorandaError::validation(
-                "Minimum Rust version cannot be empty"
+                "Minimum Rust version cannot be empty",
             ));
         }
 
@@ -185,8 +188,14 @@ mod tests {
         assert_eq!(settings.data_dir, loaded_settings.data_dir);
         assert_eq!(settings.log_level, loaded_settings.log_level);
         assert_eq!(settings.mcp_server_port, loaded_settings.mcp_server_port);
-        assert_eq!(settings.minimum_rust_version, loaded_settings.minimum_rust_version);
-        assert_eq!(settings.max_memo_file_size, loaded_settings.max_memo_file_size);
+        assert_eq!(
+            settings.minimum_rust_version,
+            loaded_settings.minimum_rust_version
+        );
+        assert_eq!(
+            settings.max_memo_file_size,
+            loaded_settings.max_memo_file_size
+        );
     }
 
     #[test]
@@ -249,7 +258,7 @@ mod tests {
             max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
         };
         assert!(settings.validate().is_ok());
-        
+
         // Test maximum valid port
         let settings = Settings {
             data_dir: PathBuf::from(DEFAULT_DATA_DIR),

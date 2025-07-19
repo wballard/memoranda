@@ -1,8 +1,8 @@
+use crate::config::Settings;
 use anyhow::Result;
 use std::fs;
 use std::path::Path;
 use tracing::info;
-use crate::config::Settings;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DiagnosticResult {
@@ -210,7 +210,9 @@ impl DoctorCommand {
                         // Extract version number
                         if let Some(version_str) = version_line.split_whitespace().nth(1) {
                             if let Ok(version) = semver::Version::parse(version_str) {
-                                let min_version = semver::Version::parse(&self.settings.minimum_rust_version).unwrap();
+                                let min_version =
+                                    semver::Version::parse(&self.settings.minimum_rust_version)
+                                        .unwrap();
                                 if version >= min_version {
                                     DiagnosticResult::Pass
                                 } else {
@@ -550,7 +552,10 @@ impl DoctorCommand {
 
         // 5. Check content integrity (reasonable size limits)
         if content.len() > self.settings.max_memo_file_size as usize {
-            return Err(anyhow::anyhow!("File size too large (>{}MB)", self.settings.max_memo_file_size / 1_000_000));
+            return Err(anyhow::anyhow!(
+                "File size too large (>{}MB)",
+                self.settings.max_memo_file_size / 1_000_000
+            ));
         }
 
         if content.trim().is_empty() {

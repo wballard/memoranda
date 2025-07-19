@@ -12,7 +12,9 @@ fn test_cli_help_command() {
     cmd.arg("help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("A note-taking MCP server for coding agents"))
+        .stdout(predicate::str::contains(
+            "A note-taking MCP server for coding agents",
+        ))
         .stdout(predicate::str::contains("Usage:"))
         .stdout(predicate::str::contains("Commands:"))
         .stdout(predicate::str::contains("doctor"))
@@ -24,8 +26,10 @@ fn test_cli_no_command_shows_help() {
     let mut cmd = Command::cargo_bin("memoranda").unwrap();
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Memoranda - A note-taking MCP server"))
-        .stdout(predicate::str::contains("USAGE:"));
+        .stdout(predicate::str::contains(
+            "Memoranda - A note-taking MCP server",
+        ))
+        .stdout(predicate::str::contains("Usage:"));
 }
 
 #[test]
@@ -34,8 +38,12 @@ fn test_cli_doctor_command() {
     cmd.arg("doctor")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Memoranda Doctor - System Health Check"))
-        .stdout(predicate::str::contains("====================================="));
+        .stdout(predicate::str::contains(
+            "Memoranda Doctor - System Health Check",
+        ))
+        .stdout(predicate::str::contains(
+            "=====================================",
+        ));
 }
 
 #[test]
@@ -45,7 +53,9 @@ fn test_cli_doctor_verbose_flag() {
         .arg("--verbose")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Memoranda Doctor - System Health Check"));
+        .stdout(predicate::str::contains(
+            "Memoranda Doctor - System Health Check",
+        ));
 }
 
 #[test]
@@ -55,7 +65,9 @@ fn test_cli_doctor_auto_fix_flag() {
         .arg("--auto-fix")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Memoranda Doctor - System Health Check"));
+        .stdout(predicate::str::contains(
+            "Memoranda Doctor - System Health Check",
+        ));
 }
 
 #[test]
@@ -66,7 +78,9 @@ fn test_cli_doctor_both_flags() {
         .arg("--auto-fix")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Memoranda Doctor - System Health Check"));
+        .stdout(predicate::str::contains(
+            "Memoranda Doctor - System Health Check",
+        ));
 }
 
 #[test]
@@ -93,7 +107,9 @@ fn test_cli_help_flag() {
     cmd.arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("A note-taking MCP server for coding agents"))
+        .stdout(predicate::str::contains(
+            "A note-taking MCP server for coding agents",
+        ))
         .stdout(predicate::str::contains("Usage:"))
         .stdout(predicate::str::contains("Commands:"));
 }
@@ -105,7 +121,9 @@ fn test_cli_doctor_help() {
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Check system health and configuration"))
+        .stdout(predicate::str::contains(
+            "Check system health and configuration",
+        ))
         .stdout(predicate::str::contains("--verbose"))
         .stdout(predicate::str::contains("--auto-fix"));
 }
@@ -128,7 +146,9 @@ fn test_cli_doctor_in_temporary_directory() {
         .arg("doctor")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Memoranda Doctor - System Health Check"));
+        .stdout(predicate::str::contains(
+            "Memoranda Doctor - System Health Check",
+        ));
 }
 
 #[test]
@@ -175,7 +195,9 @@ fn test_cli_doctor_with_auto_fix_creates_directory() {
         .arg("--auto-fix")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Memoranda Doctor - System Health Check"));
+        .stdout(predicate::str::contains(
+            "Memoranda Doctor - System Health Check",
+        ));
 
     // Note: Auto-fix may create the directory, but this depends on the actual implementation
     // The test just verifies the command runs successfully
@@ -185,7 +207,7 @@ fn test_cli_doctor_with_auto_fix_creates_directory() {
 fn test_cli_doctor_with_invalid_memoranda_file() {
     let temp_dir = TempDir::new().unwrap();
     let memoranda_path = temp_dir.path().join(".memoranda");
-    
+
     // Create a file instead of directory
     fs::write(&memoranda_path, "not a directory").unwrap();
 
@@ -202,10 +224,7 @@ fn test_cli_doctor_with_invalid_memoranda_file() {
 fn test_cli_exit_codes() {
     // Test successful command
     let mut cmd = Command::cargo_bin("memoranda").unwrap();
-    cmd.arg("help")
-        .assert()
-        .success()
-        .code(0);
+    cmd.arg("help").assert().success().code(0);
 
     // Test invalid command
     let mut cmd = Command::cargo_bin("memoranda").unwrap();
@@ -249,16 +268,19 @@ fn test_cli_doctor_recommendations() {
         .arg("doctor")
         .assert()
         .success()
-        .stdout(predicate::str::contains("RECOMMENDATIONS:").or(predicate::str::contains("All systems operational")));
+        .stdout(
+            predicate::str::contains("RECOMMENDATIONS:")
+                .or(predicate::str::contains("All systems operational")),
+        );
 }
 
 #[test]
 fn test_cli_concurrent_execution() {
-    use std::thread;
     use std::sync::mpsc;
+    use std::thread;
 
     let (tx, rx) = mpsc::channel();
-    
+
     // Run multiple CLI commands concurrently
     for i in 0..5 {
         let tx = tx.clone();
@@ -306,9 +328,7 @@ fn test_cli_different_working_directories() {
 fn test_cli_memory_usage() {
     for _ in 0..10 {
         let mut cmd = Command::cargo_bin("memoranda").unwrap();
-        cmd.arg("help")
-            .assert()
-            .success();
+        cmd.arg("help").assert().success();
     }
 }
 

@@ -7,6 +7,10 @@ authors = ["Will Ballard <wballard@mailframe.net>"]
 license = "MIT"
 repository = "https://github.com/wballard/memoranda"
 
+[features]
+# Enable stress tests for performance benchmarking with very large datasets
+stress_tests = []
+
 [dependencies]
 # MCP server implementation
 mcp-sdk = "0.0.3"

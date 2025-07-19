@@ -1,4 +1,3 @@
-use anyhow::Result;
 use tracing::info;
 
 #[derive(Default)]
@@ -9,14 +8,14 @@ impl HelpCommand {
         Self
     }
 
-    pub fn run(&self) -> Result<()> {
+    pub fn run(&self) {
         info!("Displaying help");
         println!("Memoranda - A note-taking MCP server for coding agents");
         println!();
-        println!("USAGE:");
+        println!("Usage:");
         println!("    memoranda [COMMAND]");
         println!();
-        println!("COMMANDS:");
+        println!("Commands:");
         println!("    doctor    Check system health and configuration");
         println!("    serve     Start the MCP server on stdio");
         println!();
@@ -43,7 +42,6 @@ impl HelpCommand {
         println!("3. Use the memo tools in Claude Code to manage your notes");
         println!();
         println!("For more information, visit: https://github.com/wballard/memoranda");
-        Ok(())
     }
 }
 
@@ -54,8 +52,7 @@ mod tests {
     #[test]
     fn test_help_command_execution() {
         let help = HelpCommand::new();
-        let result = help.run();
-        assert!(result.is_ok());
+        help.run(); // Should not panic
     }
 
     #[test]
