@@ -1265,9 +1265,10 @@ mod tests {
 
         // For small operations, async might not be significantly faster,
         // but it should at least work correctly
-        println!(
-            "Async duration: {:?}, Sync duration: {:?}",
-            async_duration, sync_duration
+        tracing::info!(
+            async_duration = ?async_duration,
+            sync_duration = ?sync_duration,
+            "Performance comparison completed"
         );
 
         // Verify both approaches created the same number of memos
@@ -1296,42 +1297,44 @@ mod tests {
             .unwrap();
 
         let memo_id = memo.id;
-        println!("Created memo with ID: {}", memo_id);
+        tracing::debug!(memo_id = %memo_id, "Created test memo");
 
         // Check cache stats after creation
         let stats_after_create = store.get_cache_stats().await;
-        println!(
-            "Stats after create: hits={}, misses={}, cache_size={}",
-            stats_after_create.memo_hits,
-            stats_after_create.memo_misses,
-            stats_after_create.memo_cache_size
+        tracing::debug!(
+            hits = stats_after_create.memo_hits,
+            misses = stats_after_create.memo_misses,
+            cache_size = stats_after_create.memo_cache_size,
+            "Cache stats after creation"
         );
 
         // First retrieval should cache the memo
         let retrieved1 = store.get_memo_async(&memo_id).await.unwrap();
         assert!(retrieved1.is_some());
-        println!("First retrieval successful");
+        tracing::debug!("First retrieval successful");
 
         // Check cache stats after first retrieval
         let stats_after_first = store.get_cache_stats().await;
-        println!(
-            "Stats after first retrieval: hits={}, misses={}, cache_size={}",
-            stats_after_first.memo_hits,
-            stats_after_first.memo_misses,
-            stats_after_first.memo_cache_size
+        tracing::debug!(
+            hits = stats_after_first.memo_hits,
+            misses = stats_after_first.memo_misses,
+            cache_size = stats_after_first.memo_cache_size,
+            "Cache stats after first retrieval"
         );
 
         // Second retrieval should come from cache (faster)
         let retrieved2 = store.get_memo_async(&memo_id).await.unwrap();
         assert!(retrieved2.is_some());
         assert_eq!(retrieved1.unwrap().title, retrieved2.unwrap().title);
-        println!("Second retrieval successful");
+        tracing::debug!("Second retrieval successful");
 
         // Check cache stats - the important thing is that we get cache hits
         let stats = store.get_cache_stats().await;
-        println!(
-            "Final cache stats: hits={}, misses={}, cache_size={}",
-            stats.memo_hits, stats.memo_misses, stats.memo_cache_size
+        tracing::debug!(
+            hits = stats.memo_hits,
+            misses = stats.memo_misses,
+            cache_size = stats.memo_cache_size,
+            "Final cache stats"
         );
 
         // The key indicator of successful caching is cache hits
@@ -1492,9 +1495,10 @@ mod tests {
         let second_duration = start_second.elapsed();
 
         // Cache access should be faster (though with small files, difference might be minimal)
-        println!(
-            "First access: {:?}, Second access (cached): {:?}",
-            first_duration, second_duration
+        tracing::info!(
+            first_duration = ?first_duration,
+            second_duration = ?second_duration,
+            "Cache performance comparison completed"
         );
 
         // At minimum, both should work correctly

@@ -1,0 +1,45 @@
+#compdef memoranda
+
+# Zsh completion for memoranda
+
+_memoranda() {
+    local context state line
+    typeset -A opt_args
+
+    _arguments -C \
+        '1: :_memoranda_commands' \
+        '*:: :->args'
+
+    case $state in
+        args)
+            case $words[1] in
+                doctor)
+                    _arguments \
+                        '--verbose[Show verbose output with detailed information]' \
+                        '--auto-fix[Attempt to automatically fix issues]' \
+                        '(-h --help)'{-h,--help}'[Print help]'
+                    ;;
+                serve)
+                    _arguments \
+                        '(-h --help)'{-h,--help}'[Print help]'
+                    ;;
+                help)
+                    _arguments \
+                        '1: :(doctor serve)'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_memoranda_commands() {
+    local commands
+    commands=(
+        'doctor:Check system health and configuration'
+        'serve:Start the MCP server'
+        'help:Print help message or the help of the given subcommand(s)'
+    )
+    _describe 'commands' commands
+}
+
+_memoranda "$@"

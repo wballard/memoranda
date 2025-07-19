@@ -1,11 +1,27 @@
 [package]
 name = "memoranda"
 version = "0.1.0"
-edition = "2024"
-description = "A memory-augmented note-taking system with MCP server capabilities"
+edition = "2021"
+description = "A memory-augmented note-taking system with MCP server capabilities for coding agents"
 authors = ["Will Ballard <wballard@mailframe.net>"]
 license = "MIT"
 repository = "https://github.com/wballard/memoranda"
+homepage = "https://github.com/wballard/memoranda"
+documentation = "https://docs.rs/memoranda"
+readme = "README.md"
+keywords = ["mcp", "notes", "ai", "agent", "claude"]
+categories = ["command-line-utilities", "development-tools"]
+rust-version = "1.70"
+exclude = [
+    "issues/",
+    "target/",
+    ".git/",
+    "*.log"
+]
+
+[[bin]]
+name = "memoranda"
+path = "src/main.rs"
 
 [features]
 # Enable stress tests for performance benchmarking with very large datasets
