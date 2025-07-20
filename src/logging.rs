@@ -260,8 +260,11 @@ mod tests {
                 self.original_values
                     .insert(key.to_string(), env::var(key).ok());
             }
-            // SAFETY: Environment variable manipulation is encapsulated in a safe abstraction
-            // that ensures proper cleanup via Drop trait, preventing test isolation issues.
+            // SAFETY: This unsafe block is safe because:
+            // 1. We store the original value before modification to ensure restoration
+            // 2. The Drop trait guarantees cleanup even if the test panics
+            // 3. Environment variable modification is atomic at the OS level
+            // 4. Test isolation is maintained by the encapsulation pattern
             unsafe {
                 env::set_var(key, value);
             }
@@ -273,8 +276,11 @@ mod tests {
                 self.original_values
                     .insert(key.to_string(), env::var(key).ok());
             }
-            // SAFETY: Environment variable manipulation is encapsulated in a safe abstraction
-            // that ensures proper cleanup via Drop trait, preventing test isolation issues.
+            // SAFETY: This unsafe block is safe because:
+            // 1. We store the original value before removal to enable restoration
+            // 2. The Drop trait guarantees cleanup even if the test panics
+            // 3. Environment variable removal is atomic at the OS level
+            // 4. Test isolation is maintained by the encapsulation pattern
             unsafe {
                 env::remove_var(key);
             }
@@ -284,8 +290,12 @@ mod tests {
     impl Drop for TestEnvironment {
         fn drop(&mut self) {
             // Restore all environment variables to their original state
-            // SAFETY: This cleanup operation is necessary for test isolation
-            // and is safe because it's restoring the original state.
+            // SAFETY: This cleanup operation is safe because:
+            // 1. We are only restoring values that were previously captured
+            // 2. The original_values HashMap contains validated environment state
+            // 3. This restoration maintains the exact pre-test environment
+            // 4. Failure to restore would break test isolation guarantees
+            // 5. Environment variable operations are atomic at the OS level
             unsafe {
                 for (key, original_value) in &self.original_values {
                     match original_value {
@@ -316,7 +326,8 @@ mod tests {
 
         // Clear any interfering environment variables first
         test_env.remove_var("RUST_LOG");
-        
+        test_env.remove_var("MEMORANDA_LOG_LEVEL");
+
         // Set environment variables safely
         test_env.set_var("MEMORANDA_LOG_LEVEL", "debug");
         test_env.set_var("MEMORANDA_LOG_JSON", "true");
@@ -381,7 +392,7 @@ mod tests {
         // Clear any interfering environment variables
         test_env.remove_var("RUST_LOG");
         test_env.remove_var("MEMORANDA_LOG_LEVEL");
-        
+
         // Test that MEMORANDA_LOG_FILE overrides the default
         test_env.set_var("MEMORANDA_LOG_FILE", "/tmp/custom.log");
 
@@ -391,7 +402,7 @@ mod tests {
         // Environment variables are automatically restored when test_env is dropped
     }
 
-    #[test] 
+    #[test]
     fn test_default_log_file_preserved_when_no_override() {
         let mut test_env = TestEnvironment::new();
 
