@@ -1,5 +1,6 @@
 use std::env;
-use std::fs::File;
+use std::fs::{self, File};
+use std::path::Path;
 use tracing_subscriber::{
     fmt::{self, format::FmtSpan},
     layer::SubscriberExt,
@@ -44,7 +45,7 @@ impl Default for LoggingConfig {
     fn default() -> Self {
         Self {
             level: "info".to_string(),
-            file_path: None,
+            file_path: Some("./memoranda/mcp.log".to_string()),
             output_format: OutputFormat::Plain { use_colors: true },
             include: IncludeOptions {
                 location: false,
@@ -166,6 +167,16 @@ pub fn init_logging(config: &LoggingConfig) -> Result<()> {
 
     // Initialize the subscriber
     if let Some(file_path) = &config.file_path {
+        // Ensure the parent directory exists
+        if let Some(parent) = Path::new(file_path).parent() {
+            fs::create_dir_all(parent).map_err(|e| {
+                MemorandaError::config_with_source(
+                    format!("Failed to create log directory: {}", parent.display()),
+                    e,
+                )
+            })?;
+        }
+
         // Log to file
         let file = File::create(file_path).map_err(|e| {
             MemorandaError::config_with_source(format!("Failed to create log file: {file_path}"), e)
@@ -290,7 +301,7 @@ mod tests {
     fn test_default_config() {
         let config = LoggingConfig::default();
         assert_eq!(config.level, "info");
-        assert!(config.file_path.is_none());
+        assert_eq!(config.file_path, Some("./memoranda/mcp.log".to_string()));
         assert!(!config.include.location);
         assert!(config.include.spans);
         match config.output_format {
@@ -303,6 +314,9 @@ mod tests {
     fn test_config_from_env() {
         let mut test_env = TestEnvironment::new();
 
+        // Clear any interfering environment variables first
+        test_env.remove_var("RUST_LOG");
+        
         // Set environment variables safely
         test_env.set_var("MEMORANDA_LOG_LEVEL", "debug");
         test_env.set_var("MEMORANDA_LOG_JSON", "true");
@@ -356,6 +370,38 @@ mod tests {
 
         let config = LoggingConfig::from_env().unwrap();
         assert_eq!(config.level, "warn");
+
+        // Environment variables are automatically restored when test_env is dropped
+    }
+
+    #[test]
+    fn test_log_file_env_override() {
+        let mut test_env = TestEnvironment::new();
+
+        // Clear any interfering environment variables
+        test_env.remove_var("RUST_LOG");
+        test_env.remove_var("MEMORANDA_LOG_LEVEL");
+        
+        // Test that MEMORANDA_LOG_FILE overrides the default
+        test_env.set_var("MEMORANDA_LOG_FILE", "/tmp/custom.log");
+
+        let config = LoggingConfig::from_env().unwrap();
+        assert_eq!(config.file_path, Some("/tmp/custom.log".to_string()));
+
+        // Environment variables are automatically restored when test_env is dropped
+    }
+
+    #[test] 
+    fn test_default_log_file_preserved_when_no_override() {
+        let mut test_env = TestEnvironment::new();
+
+        // Clear any interfering environment variables
+        test_env.remove_var("RUST_LOG");
+        test_env.remove_var("MEMORANDA_LOG_LEVEL");
+        test_env.remove_var("MEMORANDA_LOG_FILE");
+
+        let config = LoggingConfig::from_env().unwrap();
+        assert_eq!(config.file_path, Some("./memoranda/mcp.log".to_string()));
 
         // Environment variables are automatically restored when test_env is dropped
     }
