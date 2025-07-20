@@ -5,7 +5,7 @@ use memoranda::config::Settings;
 use memoranda::error::{CliError, MemorandaError};
 use memoranda::logging;
 use memoranda::mcp::McpServer;
-use tracing::{error, info, span, warn, Level};
+use tracing::{debug, error, info, span, warn, Level};
 
 #[derive(Parser)]
 #[command(name = "memoranda")]
@@ -283,7 +283,7 @@ async fn run_cli() -> Result<()> {
                 auto_fix = auto_fix
             )
             .entered();
-            info!(
+            debug!(
                 verbose = verbose,
                 auto_fix = auto_fix,
                 "Running doctor command"

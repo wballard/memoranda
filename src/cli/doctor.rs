@@ -2,7 +2,7 @@ use crate::config::Settings;
 use anyhow::Result;
 use std::fs;
 use std::path::Path;
-use tracing::info;
+use tracing::debug;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DiagnosticResult {
@@ -67,7 +67,7 @@ impl DoctorCommand {
     pub async fn run(&self) -> Result<()> {
         use colored::Colorize;
 
-        info!("Running doctor command");
+        debug!("Running doctor command");
         println!(
             "{}",
             "Memoranda Doctor - System Health Check"
