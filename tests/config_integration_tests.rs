@@ -19,7 +19,15 @@ fn test_settings_with_extreme_values() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
     assert!(settings.validate().is_ok());
 
@@ -33,7 +41,15 @@ fn test_settings_with_extreme_values() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
     assert!(settings.validate().is_ok());
 }
@@ -50,7 +66,15 @@ fn test_settings_validation_edge_cases() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
     assert!(settings.validate().is_err());
 
@@ -64,7 +88,15 @@ fn test_settings_validation_edge_cases() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
     assert!(settings.validate().is_ok());
 }
@@ -81,10 +113,18 @@ fn test_settings_rust_version_validation() {
             mcp_server_port: 8080,
             minimum_rust_version: version.to_string(),
             max_memo_file_size: 1_000_000,
-        search_recency_boost_days: 365.0,
-        search_snippet_length: 100,
-        search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+            search_recency_boost_days: 365.0,
+            search_snippet_length: 100,
+            search_snippet_context_padding: 2,
+            expected_mcp_tools: vec![
+                "create_memo".to_string(),
+                "update_memo".to_string(),
+                "list_memos".to_string(),
+                "get_memo".to_string(),
+                "delete_memo".to_string(),
+                "search_memos".to_string(),
+                "get_all_context".to_string(),
+            ],
         };
         assert!(
             settings.validate().is_ok(),
@@ -119,10 +159,18 @@ fn test_settings_rust_version_validation() {
             mcp_server_port: 8080,
             minimum_rust_version: version.to_string(),
             max_memo_file_size: 1_000_000,
-        search_recency_boost_days: 365.0,
-        search_snippet_length: 100,
-        search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+            search_recency_boost_days: 365.0,
+            search_snippet_length: 100,
+            search_snippet_context_padding: 2,
+            expected_mcp_tools: vec![
+                "create_memo".to_string(),
+                "update_memo".to_string(),
+                "list_memos".to_string(),
+                "get_memo".to_string(),
+                "delete_memo".to_string(),
+                "search_memos".to_string(),
+                "get_all_context".to_string(),
+            ],
         };
         assert!(
             settings.validate().is_err(),
@@ -145,10 +193,18 @@ fn test_settings_log_level_validation() {
             mcp_server_port: 8080,
             minimum_rust_version: "1.70.0".to_string(),
             max_memo_file_size: 1_000_000,
-        search_recency_boost_days: 365.0,
-        search_snippet_length: 100,
-        search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+            search_recency_boost_days: 365.0,
+            search_snippet_length: 100,
+            search_snippet_context_padding: 2,
+            expected_mcp_tools: vec![
+                "create_memo".to_string(),
+                "update_memo".to_string(),
+                "list_memos".to_string(),
+                "get_memo".to_string(),
+                "delete_memo".to_string(),
+                "search_memos".to_string(),
+                "get_all_context".to_string(),
+            ],
         };
         assert!(
             settings.validate().is_ok(),
@@ -166,7 +222,15 @@ fn test_settings_log_level_validation() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
     assert!(settings.validate().is_err());
 
@@ -180,7 +244,15 @@ fn test_settings_log_level_validation() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
     // Note: Current implementation doesn't trim whitespace, so this passes validation
     // This test documents the current behavior
@@ -199,7 +271,15 @@ fn test_settings_file_operations_with_unicode() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
 
     // Save and load settings with unicode paths
@@ -360,7 +440,15 @@ fn test_settings_load_from_large_file() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
 
     large_settings.save_to_file(&path).unwrap();
@@ -379,7 +467,15 @@ fn test_settings_serialization_roundtrip() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
 
     // Serialize to JSON
@@ -410,7 +506,15 @@ fn test_settings_validation_with_realistic_scenarios() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
     assert!(dev_settings.validate().is_ok());
 
@@ -424,7 +528,15 @@ fn test_settings_validation_with_realistic_scenarios() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
     assert!(prod_settings.validate().is_ok());
 
@@ -438,7 +550,15 @@ fn test_settings_validation_with_realistic_scenarios() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
     assert!(low_resource_settings.validate().is_ok());
 }
@@ -465,10 +585,18 @@ fn test_settings_concurrent_file_operations() {
                 mcp_server_port: 8080 + i as u16,
                 minimum_rust_version: "1.70.0".to_string(),
                 max_memo_file_size: 1_000_000,
-        search_recency_boost_days: 365.0,
-        search_snippet_length: 100,
-        search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+                search_recency_boost_days: 365.0,
+                search_snippet_length: 100,
+                search_snippet_context_padding: 2,
+                expected_mcp_tools: vec![
+                    "create_memo".to_string(),
+                    "update_memo".to_string(),
+                    "list_memos".to_string(),
+                    "get_memo".to_string(),
+                    "delete_memo".to_string(),
+                    "search_memos".to_string(),
+                    "get_all_context".to_string(),
+                ],
             };
 
             let path = temp_dir.join(format!("settings-{i}.json"));
@@ -501,7 +629,15 @@ fn test_settings_path_handling_edge_cases() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
     assert!(settings.validate().is_ok());
 
@@ -515,7 +651,15 @@ fn test_settings_path_handling_edge_cases() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
     assert!(settings.validate().is_ok());
 
@@ -529,7 +673,15 @@ fn test_settings_path_handling_edge_cases() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
     assert!(settings.validate().is_ok());
 }
@@ -546,7 +698,15 @@ fn test_settings_error_message_quality() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
 
     match settings.validate() {
@@ -568,7 +728,15 @@ fn test_settings_error_message_quality() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
 
     match settings.validate() {
@@ -605,10 +773,18 @@ fn test_settings_property_based_validation() {
             mcp_server_port: port,
             minimum_rust_version: version,
             max_memo_file_size: max_size,
-        search_recency_boost_days: 365.0,
-        search_snippet_length: 100,
-        search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+            search_recency_boost_days: 365.0,
+            search_snippet_length: 100,
+            search_snippet_context_padding: 2,
+            expected_mcp_tools: vec![
+                "create_memo".to_string(),
+                "update_memo".to_string(),
+                "list_memos".to_string(),
+                "get_memo".to_string(),
+                "delete_memo".to_string(),
+                "search_memos".to_string(),
+                "get_all_context".to_string(),
+            ],
         };
 
         assert!(settings.validate().is_ok());
@@ -629,7 +805,15 @@ fn test_settings_advanced_error_scenarios() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
 
     let result = settings.validate();
@@ -657,10 +841,18 @@ fn test_settings_advanced_error_scenarios() {
             mcp_server_port: 8080,
             minimum_rust_version: version.to_string(),
             max_memo_file_size: 1_000_000,
-        search_recency_boost_days: 365.0,
-        search_snippet_length: 100,
-        search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+            search_recency_boost_days: 365.0,
+            search_snippet_length: 100,
+            search_snippet_context_padding: 2,
+            expected_mcp_tools: vec![
+                "create_memo".to_string(),
+                "update_memo".to_string(),
+                "list_memos".to_string(),
+                "get_memo".to_string(),
+                "delete_memo".to_string(),
+                "search_memos".to_string(),
+                "get_all_context".to_string(),
+            ],
         };
 
         let result = settings.validate();
@@ -682,7 +874,15 @@ fn test_settings_advanced_error_scenarios() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
 
     let result = settings.validate();
@@ -700,7 +900,15 @@ fn test_settings_advanced_error_scenarios() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
 
     let result = settings.validate();
@@ -802,7 +1010,15 @@ fn test_settings_edge_case_values() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
 
     assert!(settings.validate().is_ok());
@@ -817,7 +1033,15 @@ fn test_settings_edge_case_values() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
 
     assert!(settings.validate().is_ok());
@@ -832,7 +1056,15 @@ fn test_settings_edge_case_values() {
         search_recency_boost_days: 365.0,
         search_snippet_length: 100,
         search_snippet_context_padding: 2,
-        expected_mcp_tools: vec!["create_memo".to_string(), "update_memo".to_string(), "list_memos".to_string(), "get_memo".to_string(), "delete_memo".to_string(), "search_memos".to_string(), "get_all_context".to_string()],
+        expected_mcp_tools: vec![
+            "create_memo".to_string(),
+            "update_memo".to_string(),
+            "list_memos".to_string(),
+            "get_memo".to_string(),
+            "delete_memo".to_string(),
+            "search_memos".to_string(),
+            "get_all_context".to_string(),
+        ],
     };
 
     assert!(settings.validate().is_ok());

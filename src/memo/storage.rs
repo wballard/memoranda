@@ -153,7 +153,11 @@ impl MemoStore {
 
     /// Helper function to create a memo from content with frontmatter parsing fallback.
     /// This reduces duplication between sync and async loading methods.
-    fn create_memo_from_content_with_fallback(&self, content: String, file_path: &Path) -> Result<Memo> {
+    fn create_memo_from_content_with_fallback(
+        &self,
+        content: String,
+        file_path: &Path,
+    ) -> Result<Memo> {
         match self.parse_frontmatter(&content) {
             Ok(Some(mut memo)) => {
                 memo.file_path = Some(file_path.to_path_buf());

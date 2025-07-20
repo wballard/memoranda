@@ -301,7 +301,12 @@ impl MemoSearcher {
         self.search_with_config(query, memos, &config)
     }
 
-    pub fn search_with_config(&self, query: &SearchQuery, memos: &[Memo], config: &SearchConfig) -> Vec<SearchResult> {
+    pub fn search_with_config(
+        &self,
+        query: &SearchQuery,
+        memos: &[Memo],
+        config: &SearchConfig,
+    ) -> Vec<SearchResult> {
         let mut results = Vec::new();
 
         for memo in memos {
@@ -342,6 +347,7 @@ impl MemoSearcher {
             .collect()
     }
 
+    #[allow(dead_code)]
     fn score_memo(&self, memo: &Memo, query: &SearchQuery) -> Option<f64> {
         let config = SearchConfig {
             recency_boost_days: FALLBACK_RECENCY_BOOST_DAYS,
@@ -351,7 +357,12 @@ impl MemoSearcher {
         self.score_memo_with_config(memo, query, &config)
     }
 
-    fn score_memo_with_config(&self, memo: &Memo, query: &SearchQuery, config: &SearchConfig) -> Option<f64> {
+    fn score_memo_with_config(
+        &self,
+        memo: &Memo,
+        query: &SearchQuery,
+        config: &SearchConfig,
+    ) -> Option<f64> {
         let mut score = 0.0;
         let mut matches = false;
 
@@ -425,7 +436,8 @@ impl MemoSearcher {
         // Apply recency boost
         if matches {
             let days_since_creation = (Utc::now() - memo.created_at).num_days();
-            let recency_boost = 1.0 / (1.0 + days_since_creation as f64 / config.recency_boost_days);
+            let recency_boost =
+                1.0 / (1.0 + days_since_creation as f64 / config.recency_boost_days);
             score *= 1.0 + recency_boost;
 
             Some(score)
@@ -434,6 +446,7 @@ impl MemoSearcher {
         }
     }
 
+    #[allow(dead_code)]
     fn add_snippets(&self, result: &mut SearchResult, query: &SearchQuery) {
         let config = SearchConfig {
             recency_boost_days: FALLBACK_RECENCY_BOOST_DAYS,
@@ -443,21 +456,32 @@ impl MemoSearcher {
         self.add_snippets_with_config(result, query, &config)
     }
 
-    fn add_snippets_with_config(&self, result: &mut SearchResult, query: &SearchQuery, config: &SearchConfig) {
+    fn add_snippets_with_config(
+        &self,
+        result: &mut SearchResult,
+        query: &SearchQuery,
+        config: &SearchConfig,
+    ) {
         if !query.terms.is_empty() {
             for term in &query.terms {
-                if let Some(snippet) =
-                    self.extract_snippet_with_config(&result.memo.content, term, config.snippet_length, config.snippet_context_padding)
-                {
+                if let Some(snippet) = self.extract_snippet_with_config(
+                    &result.memo.content,
+                    term,
+                    config.snippet_length,
+                    config.snippet_context_padding,
+                ) {
                     result.snippets.push(snippet);
                 }
             }
         }
 
         if let Some(phrase) = &query.phrase {
-            if let Some(snippet) =
-                self.extract_snippet_with_config(&result.memo.content, phrase, config.snippet_length, config.snippet_context_padding)
-            {
+            if let Some(snippet) = self.extract_snippet_with_config(
+                &result.memo.content,
+                phrase,
+                config.snippet_length,
+                config.snippet_context_padding,
+            ) {
                 result.snippets.push(snippet);
             }
         }
@@ -467,11 +491,23 @@ impl MemoSearcher {
         result.snippets.dedup();
     }
 
+    #[allow(dead_code)]
     fn extract_snippet(&self, content: &str, term: &str, max_length: usize) -> Option<String> {
-        self.extract_snippet_with_config(content, term, max_length, FALLBACK_SNIPPET_CONTEXT_PADDING)
+        self.extract_snippet_with_config(
+            content,
+            term,
+            max_length,
+            FALLBACK_SNIPPET_CONTEXT_PADDING,
+        )
     }
 
-    fn extract_snippet_with_config(&self, content: &str, term: &str, max_length: usize, context_padding: usize) -> Option<String> {
+    fn extract_snippet_with_config(
+        &self,
+        content: &str,
+        term: &str,
+        max_length: usize,
+        context_padding: usize,
+    ) -> Option<String> {
         let term_lower = term.to_lowercase();
         let content_lower = content.to_lowercase();
 

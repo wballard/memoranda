@@ -42,12 +42,12 @@ pub struct Settings {
     pub mcp_server_port: u16,
     pub minimum_rust_version: String,
     pub max_memo_file_size: u64,
-    
+
     // Search configuration
     pub search_recency_boost_days: f64,
     pub search_snippet_length: usize,
     pub search_snippet_context_padding: usize,
-    
+
     // MCP configuration
     pub expected_mcp_tools: Vec<String>,
 }
@@ -63,7 +63,10 @@ impl Default for Settings {
             search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
             search_snippet_length: DEFAULT_SNIPPET_LENGTH,
             search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
-            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         }
     }
 }
@@ -127,19 +130,19 @@ impl Settings {
 
         if self.search_recency_boost_days <= 0.0 {
             return Err(MemorandaError::validation(
-                "Search recency boost days must be positive"
+                "Search recency boost days must be positive",
             ));
         }
 
         if self.search_snippet_length == 0 {
             return Err(MemorandaError::validation(
-                "Search snippet length must be greater than 0"
+                "Search snippet length must be greater than 0",
             ));
         }
 
         if self.expected_mcp_tools.is_empty() {
             return Err(MemorandaError::validation(
-                "Expected MCP tools list cannot be empty"
+                "Expected MCP tools list cannot be empty",
             ));
         }
 
@@ -201,7 +204,10 @@ mod tests {
             search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
             search_snippet_length: DEFAULT_SNIPPET_LENGTH,
             search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
-            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         };
         assert!(settings.validate().is_ok());
     }
@@ -217,7 +223,10 @@ mod tests {
             search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
             search_snippet_length: DEFAULT_SNIPPET_LENGTH,
             search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
-            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         };
         assert!(settings.validate().is_err());
     }
@@ -233,7 +242,10 @@ mod tests {
             search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
             search_snippet_length: DEFAULT_SNIPPET_LENGTH,
             search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
-            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         };
         assert!(settings.validate().is_err());
     }
@@ -274,7 +286,10 @@ mod tests {
             search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
             search_snippet_length: DEFAULT_SNIPPET_LENGTH,
             search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
-            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         };
         assert!(settings.validate().is_err());
     }
@@ -290,7 +305,10 @@ mod tests {
             search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
             search_snippet_length: DEFAULT_SNIPPET_LENGTH,
             search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
-            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         };
         assert!(settings.validate().is_err());
     }
@@ -306,7 +324,10 @@ mod tests {
             search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
             search_snippet_length: DEFAULT_SNIPPET_LENGTH,
             search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
-            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         };
         assert!(settings.validate().is_err());
     }
@@ -323,7 +344,10 @@ mod tests {
             search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
             search_snippet_length: DEFAULT_SNIPPET_LENGTH,
             search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
-            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         };
         assert!(settings.validate().is_ok());
     }
@@ -340,7 +364,10 @@ mod tests {
             search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
             search_snippet_length: DEFAULT_SNIPPET_LENGTH,
             search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
-            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         };
         assert!(settings.validate().is_ok());
 
@@ -354,7 +381,10 @@ mod tests {
             search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
             search_snippet_length: DEFAULT_SNIPPET_LENGTH,
             search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
-            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         };
         assert!(settings.validate().is_ok());
     }

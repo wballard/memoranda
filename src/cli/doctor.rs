@@ -392,7 +392,7 @@ impl DoctorCommand {
             return DiagnosticResult::Error("No tools registered in MCP server".to_string());
         }
 
-        // Check 3: Expected tools are present  
+        // Check 3: Expected tools are present
         let expected_tools = &self.settings.expected_mcp_tools;
 
         let registered_tool_names: Vec<String> = tools
@@ -410,7 +410,11 @@ impl DoctorCommand {
         if !missing_tools.is_empty() {
             return DiagnosticResult::Error(format!(
                 "Missing required tools: {}",
-                missing_tools.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+                missing_tools
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ));
         }
 
