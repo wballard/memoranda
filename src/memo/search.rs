@@ -6,11 +6,30 @@ use std::fmt::Write;
 use tracing::warn;
 
 use super::models::{Memo, MemoId};
+use crate::config::Settings;
 
-// Search scoring and snippet configuration constants
-const RECENCY_BOOST_DAYS: f64 = 365.0;
-const SNIPPET_LENGTH: usize = 100;
-const SNIPPET_CONTEXT_PADDING: usize = 2;
+// These constants are now configurable - see Settings struct
+// Kept as fallback defaults if Settings is not available
+const FALLBACK_RECENCY_BOOST_DAYS: f64 = 365.0;
+const FALLBACK_SNIPPET_LENGTH: usize = 100;
+const FALLBACK_SNIPPET_CONTEXT_PADDING: usize = 2;
+
+#[derive(Debug, Clone)]
+pub struct SearchConfig {
+    pub recency_boost_days: f64,
+    pub snippet_length: usize,
+    pub snippet_context_padding: usize,
+}
+
+impl From<&Settings> for SearchConfig {
+    fn from(settings: &Settings) -> Self {
+        Self {
+            recency_boost_days: settings.search_recency_boost_days,
+            snippet_length: settings.search_snippet_length,
+            snippet_context_padding: settings.search_snippet_context_padding,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum SearchOperator {
@@ -273,12 +292,22 @@ impl MemoSearcher {
     }
 
     pub fn search(&self, query: &SearchQuery, memos: &[Memo]) -> Vec<SearchResult> {
+        // Use fallback constants for backward compatibility
+        let config = SearchConfig {
+            recency_boost_days: FALLBACK_RECENCY_BOOST_DAYS,
+            snippet_length: FALLBACK_SNIPPET_LENGTH,
+            snippet_context_padding: FALLBACK_SNIPPET_CONTEXT_PADDING,
+        };
+        self.search_with_config(query, memos, &config)
+    }
+
+    pub fn search_with_config(&self, query: &SearchQuery, memos: &[Memo], config: &SearchConfig) -> Vec<SearchResult> {
         let mut results = Vec::new();
 
         for memo in memos {
-            if let Some(score) = self.score_memo(memo, query) {
+            if let Some(score) = self.score_memo_with_config(memo, query, config) {
                 let mut result = SearchResult::new(memo.clone(), score);
-                self.add_snippets(&mut result, query);
+                self.add_snippets_with_config(&mut result, query, config);
                 results.push(result);
             }
         }
@@ -314,6 +343,15 @@ impl MemoSearcher {
     }
 
     fn score_memo(&self, memo: &Memo, query: &SearchQuery) -> Option<f64> {
+        let config = SearchConfig {
+            recency_boost_days: FALLBACK_RECENCY_BOOST_DAYS,
+            snippet_length: FALLBACK_SNIPPET_LENGTH,
+            snippet_context_padding: FALLBACK_SNIPPET_CONTEXT_PADDING,
+        };
+        self.score_memo_with_config(memo, query, &config)
+    }
+
+    fn score_memo_with_config(&self, memo: &Memo, query: &SearchQuery, config: &SearchConfig) -> Option<f64> {
         let mut score = 0.0;
         let mut matches = false;
 
@@ -387,7 +425,7 @@ impl MemoSearcher {
         // Apply recency boost
         if matches {
             let days_since_creation = (Utc::now() - memo.created_at).num_days();
-            let recency_boost = 1.0 / (1.0 + days_since_creation as f64 / RECENCY_BOOST_DAYS);
+            let recency_boost = 1.0 / (1.0 + days_since_creation as f64 / config.recency_boost_days);
             score *= 1.0 + recency_boost;
 
             Some(score)
@@ -397,10 +435,19 @@ impl MemoSearcher {
     }
 
     fn add_snippets(&self, result: &mut SearchResult, query: &SearchQuery) {
+        let config = SearchConfig {
+            recency_boost_days: FALLBACK_RECENCY_BOOST_DAYS,
+            snippet_length: FALLBACK_SNIPPET_LENGTH,
+            snippet_context_padding: FALLBACK_SNIPPET_CONTEXT_PADDING,
+        };
+        self.add_snippets_with_config(result, query, &config)
+    }
+
+    fn add_snippets_with_config(&self, result: &mut SearchResult, query: &SearchQuery, config: &SearchConfig) {
         if !query.terms.is_empty() {
             for term in &query.terms {
                 if let Some(snippet) =
-                    self.extract_snippet(&result.memo.content, term, SNIPPET_LENGTH)
+                    self.extract_snippet_with_config(&result.memo.content, term, config.snippet_length, config.snippet_context_padding)
                 {
                     result.snippets.push(snippet);
                 }
@@ -409,7 +456,7 @@ impl MemoSearcher {
 
         if let Some(phrase) = &query.phrase {
             if let Some(snippet) =
-                self.extract_snippet(&result.memo.content, phrase, SNIPPET_LENGTH)
+                self.extract_snippet_with_config(&result.memo.content, phrase, config.snippet_length, config.snippet_context_padding)
             {
                 result.snippets.push(snippet);
             }
@@ -421,14 +468,18 @@ impl MemoSearcher {
     }
 
     fn extract_snippet(&self, content: &str, term: &str, max_length: usize) -> Option<String> {
+        self.extract_snippet_with_config(content, term, max_length, FALLBACK_SNIPPET_CONTEXT_PADDING)
+    }
+
+    fn extract_snippet_with_config(&self, content: &str, term: &str, max_length: usize, context_padding: usize) -> Option<String> {
         let term_lower = term.to_lowercase();
         let content_lower = content.to_lowercase();
 
         if let Some(pos) = content_lower.find(&term_lower) {
-            let start = pos.saturating_sub(max_length / SNIPPET_CONTEXT_PADDING);
+            let start = pos.saturating_sub(max_length / context_padding);
             let end = std::cmp::min(
                 content.len(),
-                pos + term.len() + max_length / SNIPPET_CONTEXT_PADDING,
+                pos + term.len() + max_length / context_padding,
             );
 
             let snippet = &content[start..end];

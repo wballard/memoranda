@@ -12,6 +12,58 @@ use crate::utils::{retry_with_backoff_sync, RetryConfig};
 
 const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
 
+/// Schema-driven tool registry to eliminate duplication
+/// This centralizes tool definitions and reduces maintenance burden
+struct ToolRegistry;
+
+impl ToolRegistry {
+    /// Returns the standard set of memo tools
+    /// This eliminates duplication across initialization and reinitialization
+    fn get_memo_tools() -> Vec<McpTool> {
+        vec![
+            McpTool::new(
+                "create_memo".to_string(),
+                "Create a new memo with title and content".to_string(),
+            ),
+            McpTool::new(
+                "update_memo".to_string(),
+                "Update an existing memo by ID".to_string(),
+            ),
+            McpTool::new(
+                "list_memos".to_string(),
+                "List all stored memos".to_string(),
+            ),
+            McpTool::new(
+                "get_memo".to_string(),
+                "Get a specific memo by ID".to_string(),
+            ),
+            McpTool::new("delete_memo".to_string(), "Delete a memo by ID".to_string()),
+            McpTool::new(
+                "search_memos".to_string(),
+                "Search memo content by text pattern".to_string(),
+            ),
+            McpTool::new(
+                "get_all_context".to_string(),
+                "Combine all memos for LLM context".to_string(),
+            ),
+        ]
+    }
+
+    /// Returns a minimal set of tools for when memo store is unavailable
+    fn get_fallback_tools() -> Vec<McpTool> {
+        vec![
+            McpTool::new(
+                "server_status".to_string(),
+                "Get server status and available functionality".to_string(),
+            ),
+            McpTool::new(
+                "retry_memo_store".to_string(),
+                "Attempt to reinitialize the memo store".to_string(),
+            ),
+        ]
+    }
+}
+
 pub struct McpServer {
     pub name: String,
     memo_store: Option<MemoStore>,
@@ -28,46 +80,11 @@ impl McpServer {
 
         let tools = if memo_store.is_some() {
             // Full functionality when memo store is available
-            vec![
-                McpTool::new(
-                    "create_memo".to_string(),
-                    "Create a new memo with title and content".to_string(),
-                ),
-                McpTool::new(
-                    "update_memo".to_string(),
-                    "Update an existing memo by ID".to_string(),
-                ),
-                McpTool::new(
-                    "list_memos".to_string(),
-                    "List all stored memos".to_string(),
-                ),
-                McpTool::new(
-                    "get_memo".to_string(),
-                    "Get a specific memo by ID".to_string(),
-                ),
-                McpTool::new("delete_memo".to_string(), "Delete a memo by ID".to_string()),
-                McpTool::new(
-                    "search_memos".to_string(),
-                    "Search memo content by text pattern".to_string(),
-                ),
-                McpTool::new(
-                    "get_all_context".to_string(),
-                    "Combine all memos for LLM context".to_string(),
-                ),
-            ]
+            ToolRegistry::get_memo_tools()
         } else {
             // Limited functionality when memo store is unavailable
             warn!("MCP server starting with limited functionality - memo store unavailable");
-            vec![
-                McpTool::new(
-                    "server_status".to_string(),
-                    "Get server status and available functionality".to_string(),
-                ),
-                McpTool::new(
-                    "retry_memo_store".to_string(),
-                    "Attempt to reinitialize the memo store".to_string(),
-                ),
-            ]
+            ToolRegistry::get_fallback_tools()
         };
 
         info!(
@@ -116,33 +133,7 @@ impl McpServer {
             self.memo_store = Some(store);
 
             // Update tools to full functionality
-            self.tools = vec![
-                McpTool::new(
-                    "create_memo".to_string(),
-                    "Create a new memo with title and content".to_string(),
-                ),
-                McpTool::new(
-                    "update_memo".to_string(),
-                    "Update an existing memo by ID".to_string(),
-                ),
-                McpTool::new(
-                    "list_memos".to_string(),
-                    "List all stored memos".to_string(),
-                ),
-                McpTool::new(
-                    "get_memo".to_string(),
-                    "Get a specific memo by ID".to_string(),
-                ),
-                McpTool::new("delete_memo".to_string(), "Delete a memo by ID".to_string()),
-                McpTool::new(
-                    "search_memos".to_string(),
-                    "Search memo content by text pattern".to_string(),
-                ),
-                McpTool::new(
-                    "get_all_context".to_string(),
-                    "Combine all memos for LLM context".to_string(),
-                ),
-            ];
+            self.tools = ToolRegistry::get_memo_tools();
 
             info!("Memo store successfully reinitialized - full functionality restored");
             Ok(true)

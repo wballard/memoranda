@@ -315,7 +315,7 @@ mod tests {
         assert!(config.include.location);
         assert!(!config.include.spans);
         match config.output_format {
-            OutputFormat::Json => {}, // Expected
+            OutputFormat::Json => {} // Expected
             OutputFormat::Plain { .. } => panic!("Expected JSON format"),
         }
 

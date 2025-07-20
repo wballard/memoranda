@@ -10,6 +10,22 @@ const DEFAULT_MCP_SERVER_PORT: u16 = 8080;
 const DEFAULT_MINIMUM_RUST_VERSION: &str = "1.70.0";
 const DEFAULT_MAX_MEMO_FILE_SIZE: u64 = 1_000_000; // 1MB
 
+// Search configuration constants
+const DEFAULT_RECENCY_BOOST_DAYS: f64 = 365.0;
+const DEFAULT_SNIPPET_LENGTH: usize = 100;
+const DEFAULT_SNIPPET_CONTEXT_PADDING: usize = 2;
+
+// MCP tool configuration
+const DEFAULT_EXPECTED_TOOLS: &[&str] = &[
+    "create_memo",
+    "update_memo",
+    "list_memos",
+    "get_memo",
+    "delete_memo",
+    "search_memos",
+    "get_all_context",
+];
+
 // Validation constants
 /// Minimum valid port number for MCP server.
 /// Ports below 1024 are privileged ports reserved for system services on Unix-like systems.
@@ -26,6 +42,14 @@ pub struct Settings {
     pub mcp_server_port: u16,
     pub minimum_rust_version: String,
     pub max_memo_file_size: u64,
+    
+    // Search configuration
+    pub search_recency_boost_days: f64,
+    pub search_snippet_length: usize,
+    pub search_snippet_context_padding: usize,
+    
+    // MCP configuration
+    pub expected_mcp_tools: Vec<String>,
 }
 
 impl Default for Settings {
@@ -36,6 +60,10 @@ impl Default for Settings {
             mcp_server_port: DEFAULT_MCP_SERVER_PORT,
             minimum_rust_version: DEFAULT_MINIMUM_RUST_VERSION.to_string(),
             max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
+            search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
+            search_snippet_length: DEFAULT_SNIPPET_LENGTH,
+            search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
         }
     }
 }
@@ -46,6 +74,13 @@ impl Settings {
         let settings = Self::default();
         settings.validate()?;
         Ok(settings)
+    }
+
+    /// Creates new validated settings, falling back to defaults if validation fails.
+    /// This is a convenience method that encapsulates the common pattern of
+    /// Settings::new().unwrap_or_default().
+    pub fn new_or_default() -> Self {
+        Self::new().unwrap_or_default()
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -88,6 +123,24 @@ impl Settings {
             return Err(MemorandaError::validation(format!(
                 "Maximum memo file size must be at least {MIN_MEMO_FILE_SIZE} bytes"
             )));
+        }
+
+        if self.search_recency_boost_days <= 0.0 {
+            return Err(MemorandaError::validation(
+                "Search recency boost days must be positive"
+            ));
+        }
+
+        if self.search_snippet_length == 0 {
+            return Err(MemorandaError::validation(
+                "Search snippet length must be greater than 0"
+            ));
+        }
+
+        if self.expected_mcp_tools.is_empty() {
+            return Err(MemorandaError::validation(
+                "Expected MCP tools list cannot be empty"
+            ));
         }
 
         Ok(())
@@ -145,6 +198,10 @@ mod tests {
             mcp_server_port: DEFAULT_MCP_SERVER_PORT,
             minimum_rust_version: DEFAULT_MINIMUM_RUST_VERSION.to_string(),
             max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
+            search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
+            search_snippet_length: DEFAULT_SNIPPET_LENGTH,
+            search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
         };
         assert!(settings.validate().is_ok());
     }
@@ -157,6 +214,10 @@ mod tests {
             mcp_server_port: MIN_VALID_PORT - 1, // Invalid port
             minimum_rust_version: DEFAULT_MINIMUM_RUST_VERSION.to_string(),
             max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
+            search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
+            search_snippet_length: DEFAULT_SNIPPET_LENGTH,
+            search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
         };
         assert!(settings.validate().is_err());
     }
@@ -169,6 +230,10 @@ mod tests {
             mcp_server_port: DEFAULT_MCP_SERVER_PORT,
             minimum_rust_version: DEFAULT_MINIMUM_RUST_VERSION.to_string(),
             max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
+            search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
+            search_snippet_length: DEFAULT_SNIPPET_LENGTH,
+            search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
         };
         assert!(settings.validate().is_err());
     }
@@ -206,6 +271,10 @@ mod tests {
             mcp_server_port: DEFAULT_MCP_SERVER_PORT,
             minimum_rust_version: "invalid.version".to_string(),
             max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
+            search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
+            search_snippet_length: DEFAULT_SNIPPET_LENGTH,
+            search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
         };
         assert!(settings.validate().is_err());
     }
@@ -218,6 +287,10 @@ mod tests {
             mcp_server_port: DEFAULT_MCP_SERVER_PORT,
             minimum_rust_version: "".to_string(),
             max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
+            search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
+            search_snippet_length: DEFAULT_SNIPPET_LENGTH,
+            search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
         };
         assert!(settings.validate().is_err());
     }
@@ -230,6 +303,10 @@ mod tests {
             mcp_server_port: DEFAULT_MCP_SERVER_PORT,
             minimum_rust_version: DEFAULT_MINIMUM_RUST_VERSION.to_string(),
             max_memo_file_size: MIN_MEMO_FILE_SIZE - 1, // Invalid size
+            search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
+            search_snippet_length: DEFAULT_SNIPPET_LENGTH,
+            search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
         };
         assert!(settings.validate().is_err());
     }
@@ -243,6 +320,10 @@ mod tests {
             mcp_server_port: u16::MAX, // Maximum possible port
             minimum_rust_version: DEFAULT_MINIMUM_RUST_VERSION.to_string(),
             max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
+            search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
+            search_snippet_length: DEFAULT_SNIPPET_LENGTH,
+            search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
         };
         assert!(settings.validate().is_ok());
     }
@@ -256,6 +337,10 @@ mod tests {
             mcp_server_port: MIN_VALID_PORT,
             minimum_rust_version: DEFAULT_MINIMUM_RUST_VERSION.to_string(),
             max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
+            search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
+            search_snippet_length: DEFAULT_SNIPPET_LENGTH,
+            search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
         };
         assert!(settings.validate().is_ok());
 
@@ -266,6 +351,10 @@ mod tests {
             mcp_server_port: u16::MAX,
             minimum_rust_version: DEFAULT_MINIMUM_RUST_VERSION.to_string(),
             max_memo_file_size: DEFAULT_MAX_MEMO_FILE_SIZE,
+            search_recency_boost_days: DEFAULT_RECENCY_BOOST_DAYS,
+            search_snippet_length: DEFAULT_SNIPPET_LENGTH,
+            search_snippet_context_padding: DEFAULT_SNIPPET_CONTEXT_PADDING,
+            expected_mcp_tools: DEFAULT_EXPECTED_TOOLS.iter().map(|s| s.to_string()).collect(),
         };
         assert!(settings.validate().is_ok());
     }

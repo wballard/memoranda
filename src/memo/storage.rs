@@ -140,6 +140,45 @@ impl MemoStore {
         Ok(())
     }
 
+    /// Prepares file content for memo serialization with frontmatter.
+    /// This helper reduces duplication between sync and async save methods.
+    fn prepare_memo_file_content(&self, memo: &Memo) -> Result<String> {
+        // Create memo without file_path for serialization
+        let mut memo_for_serialization = memo.clone();
+        memo_for_serialization.file_path = None;
+
+        let frontmatter = serde_json::to_string_pretty(&memo_for_serialization)?;
+        Ok(format!("---\n{}\n---\n{}", frontmatter, memo.content))
+    }
+
+    /// Helper function to create a memo from content with frontmatter parsing fallback.
+    /// This reduces duplication between sync and async loading methods.
+    fn create_memo_from_content_with_fallback(&self, content: String, file_path: &Path) -> Result<Memo> {
+        match self.parse_frontmatter(&content) {
+            Ok(Some(mut memo)) => {
+                memo.file_path = Some(file_path.to_path_buf());
+                Ok(memo)
+            }
+            Ok(None) => {
+                // No frontmatter found, create new memo from content
+                let title = extract_title_from_filename(file_path);
+                let memo = Memo::with_file_path(title, content, Some(file_path.to_path_buf()))?;
+                Ok(memo)
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to parse frontmatter in {}: {}",
+                    file_path.display(),
+                    e
+                );
+                // Fallback: create new memo from content
+                let title = extract_title_from_filename(file_path);
+                let memo = Memo::with_file_path(title, content, Some(file_path.to_path_buf()))?;
+                Ok(memo)
+            }
+        }
+    }
+
     // Helper function to parse frontmatter and extract memo ID from content
     fn extract_memo_id_from_content(content: &str, file_path: &Path) -> Result<Option<MemoId>> {
         if !content.starts_with("---\n") {
@@ -229,6 +268,28 @@ impl MemoStore {
         }
 
         Ok(memoranda_dirs)
+    }
+
+    /// Gets the first available memoranda directory (sync version).
+    /// This helper reduces duplication of the common pattern:
+    /// find_memoranda_dirs()?.first().ok_or(NoMemorandaDirectories)
+    pub fn get_primary_memoranda_dir(&self) -> Result<PathBuf> {
+        let memoranda_dirs = self.find_memoranda_dirs()?;
+        memoranda_dirs
+            .first()
+            .cloned()
+            .ok_or(MemoStoreError::NoMemorandaDirectories)
+    }
+
+    /// Gets the first available memoranda directory (async version).
+    /// This helper reduces duplication of the common pattern:
+    /// find_memoranda_dirs_async().await?.first().ok_or(NoMemorandaDirectories)
+    pub async fn get_primary_memoranda_dir_async(&self) -> Result<PathBuf> {
+        let memoranda_dirs = self.find_memoranda_dirs_async().await?;
+        memoranda_dirs
+            .first()
+            .cloned()
+            .ok_or(MemoStoreError::NoMemorandaDirectories)
     }
 
     pub fn list_memos(&self) -> Result<Vec<Memo>> {
@@ -366,10 +427,7 @@ impl MemoStore {
     }
 
     pub fn create_memo(&self, title: String, content: String) -> Result<Memo> {
-        let memoranda_dirs = self.find_memoranda_dirs()?;
-        let target_dir = memoranda_dirs
-            .first()
-            .ok_or(MemoStoreError::NoMemorandaDirectories)?;
+        let target_dir = self.get_primary_memoranda_dir()?;
 
         let filename = sanitize_filename(&title);
         let file_path = target_dir.join(format!("{filename}.md"));
@@ -383,10 +441,7 @@ impl MemoStore {
     }
 
     pub async fn create_memo_async(&self, title: String, content: String) -> Result<Memo> {
-        let memoranda_dirs = self.find_memoranda_dirs_async().await?;
-        let target_dir = memoranda_dirs
-            .first()
-            .ok_or(MemoStoreError::NoMemorandaDirectories)?;
+        let target_dir = self.get_primary_memoranda_dir_async().await?;
 
         let filename = sanitize_filename(&title);
         let file_path = target_dir.join(format!("{filename}.md"));
@@ -483,60 +538,12 @@ impl MemoStore {
 
     fn load_memo_from_file(&self, file_path: &Path) -> Result<Memo> {
         let content = fs::read_to_string(file_path)?;
-
-        // Try to parse frontmatter
-        match self.parse_frontmatter(&content) {
-            Ok(Some(mut memo)) => {
-                memo.file_path = Some(file_path.to_path_buf());
-                Ok(memo)
-            }
-            Ok(None) => {
-                // No frontmatter found, create new memo from content
-                let title = extract_title_from_filename(file_path);
-                let memo = Memo::with_file_path(title, content, Some(file_path.to_path_buf()))?;
-                Ok(memo)
-            }
-            Err(e) => {
-                warn!(
-                    "Failed to parse frontmatter in {}: {}",
-                    file_path.display(),
-                    e
-                );
-                // Fallback: create new memo from content
-                let title = extract_title_from_filename(file_path);
-                let memo = Memo::with_file_path(title, content, Some(file_path.to_path_buf()))?;
-                Ok(memo)
-            }
-        }
+        self.create_memo_from_content_with_fallback(content, file_path)
     }
 
     async fn load_memo_from_file_async(&self, file_path: &Path) -> Result<Memo> {
         let content = async_fs::read_to_string(file_path).await?;
-
-        // Try to parse frontmatter
-        match self.parse_frontmatter(&content) {
-            Ok(Some(mut memo)) => {
-                memo.file_path = Some(file_path.to_path_buf());
-                Ok(memo)
-            }
-            Ok(None) => {
-                // No frontmatter found, create new memo from content
-                let title = extract_title_from_filename(file_path);
-                let memo = Memo::with_file_path(title, content, Some(file_path.to_path_buf()))?;
-                Ok(memo)
-            }
-            Err(e) => {
-                warn!(
-                    "Failed to parse frontmatter in {}: {}",
-                    file_path.display(),
-                    e
-                );
-                // Fallback: create new memo from content
-                let title = extract_title_from_filename(file_path);
-                let memo = Memo::with_file_path(title, content, Some(file_path.to_path_buf()))?;
-                Ok(memo)
-            }
-        }
+        self.create_memo_from_content_with_fallback(content, file_path)
     }
 
     fn parse_frontmatter(&self, content: &str) -> Result<Option<Memo>> {
@@ -571,12 +578,7 @@ impl MemoStore {
             fs::create_dir_all(parent)?;
         }
 
-        // Create memo without file_path for serialization
-        let mut memo_for_serialization = memo.clone();
-        memo_for_serialization.file_path = None;
-
-        let frontmatter = serde_json::to_string_pretty(&memo_for_serialization)?;
-        let file_content = format!("---\n{}\n---\n{}", frontmatter, memo.content);
+        let file_content = self.prepare_memo_file_content(memo)?;
 
         // Atomic write: write to temporary file first, then rename
         let temp_file_path = file_path.with_extension("md.tmp");
@@ -611,12 +613,7 @@ impl MemoStore {
             async_fs::create_dir_all(parent).await?;
         }
 
-        // Create memo without file_path for serialization
-        let mut memo_for_serialization = memo.clone();
-        memo_for_serialization.file_path = None;
-
-        let frontmatter = serde_json::to_string_pretty(&memo_for_serialization)?;
-        let file_content = format!("---\n{}\n---\n{}", frontmatter, memo.content);
+        let file_content = self.prepare_memo_file_content(memo)?;
 
         // Atomic write: write to temporary file first, then rename
         let temp_file_path = file_path.with_extension("md.tmp");

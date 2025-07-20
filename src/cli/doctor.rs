@@ -29,7 +29,7 @@ impl Default for DoctorCommand {
         Self {
             verbose: false,
             auto_fix: false,
-            settings: Settings::new().unwrap_or_default(),
+            settings: Settings::new_or_default(),
         }
     }
 }
@@ -40,7 +40,7 @@ impl DoctorCommand {
         Self {
             verbose: false,
             auto_fix: false,
-            settings: Settings::new().unwrap_or_default(),
+            settings: Settings::new_or_default(),
         }
     }
 
@@ -49,7 +49,7 @@ impl DoctorCommand {
         Self {
             verbose,
             auto_fix,
-            settings: Settings::new().unwrap_or_default(),
+            settings: Settings::new_or_default(),
         }
     }
 
@@ -392,16 +392,8 @@ impl DoctorCommand {
             return DiagnosticResult::Error("No tools registered in MCP server".to_string());
         }
 
-        // Check 3: Expected tools are present
-        let expected_tools = vec![
-            "create_memo",
-            "update_memo",
-            "list_memos",
-            "get_memo",
-            "delete_memo",
-            "search_memos",
-            "get_all_context",
-        ];
+        // Check 3: Expected tools are present  
+        let expected_tools = &self.settings.expected_mcp_tools;
 
         let registered_tool_names: Vec<String> = tools
             .iter()
@@ -418,7 +410,7 @@ impl DoctorCommand {
         if !missing_tools.is_empty() {
             return DiagnosticResult::Error(format!(
                 "Missing required tools: {}",
-                missing_tools.join(", ")
+                missing_tools.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
             ));
         }
 
